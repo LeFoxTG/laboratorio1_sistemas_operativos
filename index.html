@@ -1,59 +1,75 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Simulador de Procesos OS</title>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; }
-        h1 { text-align: center; color: #333; }
-        
-        /* Contenedor principal de las columnas */
-        .tablero { display: flex; gap: 20px; justify-content: center; }
-        
-        /* Estilo de cada columna (Estado) */
-        .columna {
-            background-color: #fff; border-radius: 8px; width: 250px;
-            padding: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .columna h2 { font-size: 18px; text-align: center; border-bottom: 2px solid #ddd; padding-bottom: 10px;}
-        
-        /* Colores para identificar los estados */
-        .titulo-listos { color: #2196F3; } /* Azul */
-        .titulo-cpu { color: #4CAF50; }    /* Verde */
-        .titulo-bloqueados { color: #FF9800; } /* Naranja */
-        .titulo-terminados { color: #9E9E9E; } /* Gris */
+  <meta charset="UTF-8">
+  <title>Simulador de Procesos SO</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; }
+    h1 { text-align: center; color: #333; }
 
-        /* Estilo de la "tarjeta" de cada proceso (BCP) */
-        .tarjeta-proceso {
-            background-color: #e9ecef; border-left: 5px solid #333;
-            padding: 10px; margin-bottom: 10px; border-radius: 4px;
-        }
-        .tarjeta-proceso strong { font-size: 16px; display: block; }
-        .tarjeta-proceso span { font-size: 12px; color: #666; }
-    </style>
+    /* Contenedor principal de las columnas */
+    .tablero { display: flex; gap: 20px; justify-content: center; }
+
+    /* Estilo de cada columna (Estado) */
+    .columna {
+      background-color: #fff; border-radius: 8px; width: 250px;
+      padding: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .columna h2 { font-size: 18px; text-align: center; border-bottom: 2px solid #ddd; padding-bottom: 10px;}
+
+    /* Colores para identificar los estados */
+    .titulo-listos { color: #2196F3; } /* Azul */
+    .titulo-cpu { color: #4CAF50; }    /* Verde */
+    .titulo-bloqueados { color: #FF9800; } /* Naranja */
+    .titulo-terminados { color: #9E9E9E; } /* Gris */
+
+    /* Estilo de la "tarjeta" de cada proceso (BCP) */
+    .tarjeta-proceso {
+      background-color: #e9ecef; border-left: 5px solid #333;
+      padding: 10px; margin-bottom: 10px; border-radius: 4px;
+    }
+    .tarjeta-proceso strong { font-size: 16px; display: block; }
+    .tarjeta-proceso span { font-size: 12px; color: #666; }
+  </style>
 </head>
 <body>
 
-    <h1>Simulador de Procesos</h1>
+<h1>Simulador de Procesos</h1>
 
-    <div class="tablero">
-        <div class="columna">
-            <h2 class="titulo-listos">Cola de Listos</h2>
-            <div id="caja-listos"></div> </div>
+<div style="text-align: center; margin-bottom: 20px; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); max-width: 600px; margin-left: auto; margin-right: auto;">
+  <input type="text" id="input-nombre" placeholder="Nombre (Ej. Word)" style="padding: 5px; width: 150px;">
+  <input type="number" id="input-tiempo" placeholder="Tics (Ej. 5)" min="1" style="padding: 5px; width: 100px;">
+  <button onclick="agregarProceso()" style="padding: 6px 15px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Añadir Proceso</button>
+</div>
 
-        <div class="columna">
-            <h2 class="titulo-cpu">En CPU (Ejecutando)</h2>
-            <div id="caja-cpu"></div> </div>
+<div class="tablero">
+  <div class="columna">
+    <h2 class="titulo-listos">Cola de Listos</h2>
+    <div id="caja-listos"></div> </div>
 
-        <div class="columna">
-            <h2 class="titulo-bloqueados">Bloqueados</h2>
-            <div id="caja-bloqueados"></div> </div>
+  <div class="columna">
+    <h2 class="titulo-cpu">En CPU (Ejecutando)</h2>
+    <div id="caja-cpu"></div> </div>
 
-        <div class="columna">
-            <h2 class="titulo-terminados">Terminados</h2>
-            <div id="caja-terminados"></div> </div>
-    </div>
+  <div class="columna">
+    <h2 class="titulo-bloqueados">Bloqueados</h2>
+    <div id="caja-bloqueados"></div> </div>
 
-    <script src="script.js"></script>
+  <div class="columna">
+    <h2 class="titulo-terminados">Terminados</h2>
+    <div id="caja-terminados"></div> </div>
+</div>
+
+<button onclick="iniciarSimulacion()">Iniciar Simulación</button>
+
+<button onclick="detenerSimulacion()">Detener</button>
+
+<button onclick="ticSistema()">Avanzar 1 Tic</button>
+
+<button onclick="bloquearProceso()">Bloquear CPU</button>
+
+<button onclick="desbloquearProceso()">Desbloquear</button>
+<script src="app.js"></script>
 </body>
 </html>
+
