@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulador de Procesos</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #f4f4f9;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .tablero {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    .columna {
+      background: white;
+      border-radius: 8px;
+      width: 230px;
+      padding: 15px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .titulo-listos { color: #2196F3; }
+    .titulo-cpu { color: #4CAF50; }
+    .titulo-bloqueados { color: #FF9800; }
+    .titulo-terminados { color: #9E9E9E; }
+    .titulo-nuevos { color: #673AB7; }
+
+    .tarjeta-proceso {
+      background: #e9ecef;
+      padding: 8px;
+      margin: 5px 0;
+      border-left: 5px solid #333;
+      border-radius: 4px;
+    }
+
+    .boton-pro {
+      background: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 5px;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .tarjeta-proceso span {
+      display: block;
+      font-size: 12px;
+      color: #666;
+    }
+
+    /* GANTT */
+    #gantt {
+      display: flex;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .bloque {
+      padding: 8px;
+      margin: 2px;
+      color: white;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Simulador de Procesos</h1>
+
+<!-- AGREGAR PROCESO -->
+<div style="text-align:center; margin-bottom:15px;">
+  <input id="nombre" placeholder="Nombre">
+  <input id="tiempo" type="number" placeholder="Tics">
+  <button class="boton-pro" onclick="agregarProceso()">Agregar</button>
+</div>
+
+<!-- CONTROLES -->
+<div style="text-align:center;">
+  <select id="algoritmo">
+    <option value="FCFS">FCFS</option>
+    <option value="SJF">SJF</option>
+    <option value="SRTF">SRTF</option>
+  </select>
+
+  <button class="boton-pro" onclick="iniciar()">Iniciar</button>
+  <button class="boton-pro" onclick="detener()">Detener</button>
+  <button class="boton-pro" onclick="tic()">+1 Tic</button>
+  <button class="boton-pro" onclick="bloquear()">Bloquear CPU</button>
+  <button class="boton-pro" onclick="desbloquear()">Desbloquear</button>
+  <button class="boton-pro" onclick="reiniciar()" style="background:#f44336; color:white;">Reiniciar</button>
+</div>
+
+<!-- TABLERO -->
+<div class="tablero">
+
+  <div class="columna">
+    <h3 class="titulo-nuevos">Nuevos</h3>
+    <div id="nuevos"></div>
+  </div>
+
+  <div class="columna">
+    <h3 class="titulo-listos">Listos</h3>
+    <div id="listos"></div>
+  </div>
+
+  <div class="columna">
+    <h3 class="titulo-bloqueados">Bloqueados</h3>
+    <div id="bloqueados"></div>
+  </div>
+
+  <div class="columna">
+    <h3 class="titulo-cpu">CPU</h3>
+    <div id="cpu"></div>
+  </div>
+
+  <div class="columna">
+    <h3 class="titulo-terminados">Terminados</h3>
+    <div id="terminados"></div>
+  </div>
+
+</div>
+
+<h3>Diagrama de Gantt</h3>
+<div id="gantt"></div>
+
+<h3>Tiempos de Espera</h3>
+<div id="tiempos"></div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
