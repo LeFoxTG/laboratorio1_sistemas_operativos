@@ -1,0 +1,698 @@
+/* ═══════════════════════════════════════════════════════════════
+   simulador_memoria.css
+   Estilos del Simulador de Gestión de Memoria — 16 MiB
+   Universidad / Sistemas Operativos
+
+   Organización:
+     1. Variables de tema (colores, tipografía)
+     2. Reset y base
+     3. Encabezado
+     4. Layout principal (3 columnas)
+     5. Paneles laterales y central
+     6. Títulos de panel y divisores
+     7. Controles (selects, botones, inputs)
+     8. Lista de programas
+     9. Barra de segmentos de proceso
+    10. Mapa visual de memoria
+    11. Etiquetas de dirección
+    12. Tabla de particiones
+    13. Panel de fragmentación
+    14. Panel de detalles del proceso
+    15. Log de eventos
+    16. Utilidades varias
+═══════════════════════════════════════════════════════════════ */
+
+
+/* ───────────────────────────────────────────────
+   1. VARIABLES DE TEMA
+   Paleta oscura de terminal / sistemas operativos
+─────────────────────────────────────────────── */
+:root {
+  /* Fondos en orden de profundidad */
+  --bg:      #0f0f13;   /* fondo más oscuro (body) */
+  --bg2:     #16161c;   /* paneles laterales */
+  --bg3:     #1d1d26;   /* tarjetas y controles internos */
+
+  /* Bordes */
+  --border:  #2a2a38;   /* bordes suaves */
+  --border2: #3a3a50;   /* bordes con más contraste */
+
+  /* Colores de acento */
+  --accent:  #6c63ff;   /* morado principal */
+  --accent2: #9d95ff;   /* morado claro (hover / activo) */
+
+  /* Colores semánticos */
+  --green:  #2dce89;    /* proceso cargado / OK */
+  --green2: #1a9e62;    /* borde de proceso en RAM */
+  --red:    #f5365c;    /* error / liberar / ocupado */
+  --amber:  #fb6340;    /* advertencia / fragmentación */
+  --cyan:   #11cdef;    /* info / log informativo */
+
+  /* Texto en tres niveles de prominencia */
+  --text:  #e4e4f0;     /* texto principal */
+  --text2: #9090b0;     /* texto secundario */
+  --text3: #606080;     /* texto terciario / etiquetas */
+
+  /* Tipografía monoespaciada (adecuada para direcciones hex) */
+  --font: 'Courier New', monospace;
+}
+
+
+/* ───────────────────────────────────────────────
+   2. RESET Y BASE
+─────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  min-height: 100vh;
+}
+
+
+/* ───────────────────────────────────────────────
+   3. ENCABEZADO
+─────────────────────────────────────────────── */
+header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border2);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+header .logo {
+  font-size: 15px;
+  font-weight: bold;
+  color: var(--accent2);
+  letter-spacing: 1px;
+}
+
+header .subtitle {
+  color: var(--text2);
+  font-size: 11px;
+}
+
+/* Badge informativo con el rango de direcciones RAM */
+header .badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+}
+
+
+/* ───────────────────────────────────────────────
+   4. LAYOUT PRINCIPAL (3 columnas)
+   Izquierda fija | Centro flexible | Derecha fija
+─────────────────────────────────────────────── */
+.main-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr 320px;
+  height: calc(100vh - 53px); /* descuenta la altura del header */
+  overflow: hidden;
+}
+
+
+/* ───────────────────────────────────────────────
+   5. PANELES
+─────────────────────────────────────────────── */
+
+/* Panel lateral genérico (izquierdo) */
+.panel {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* Panel central: mapa de memoria y tabla */
+.center-panel {
+  background: var(--bg);
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* Panel derecho: detalles y log */
+.right-panel {
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+}
+
+
+/* ───────────────────────────────────────────────
+   6. TÍTULOS DE PANEL Y DIVISORES
+─────────────────────────────────────────────── */
+
+/* Títulos de sección dentro de los paneles */
+.panel-title {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--text3);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Título compacto (sin uppercase agresivo) */
+.compact-title {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+/* Línea divisoria horizontal */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+
+/* ───────────────────────────────────────────────
+   7. CONTROLES (selects, botones, inputs)
+─────────────────────────────────────────────── */
+
+/* Contenedor de cada bloque de control */
+.ctrl-section {
+  margin-bottom: 16px;
+}
+
+/* Etiqueta pequeña sobre cada control */
+.ctrl-label {
+  font-size: 10px;
+  color: var(--text3);
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Estilos base compartidos por select, button e input numérico */
+select,
+button,
+input[type=number] {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-family: var(--font);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+select:focus,
+input:focus {
+  border-color: var(--accent);
+}
+
+/* Botón primario */
+button {
+  cursor: pointer;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: bold;
+  margin-top: 4px;
+}
+
+button:hover {
+  background: var(--accent2);
+}
+
+/* Botón de peligro (terminar proceso, resetear) */
+button.danger {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+button.danger:hover {
+  background: #ff5575;
+}
+
+/* Botón secundario / neutro */
+button.secondary {
+  background: transparent;
+  border-color: var(--border2);
+  color: var(--text2);
+}
+
+button.secondary:hover {
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--bg3);
+}
+
+/* Botón de éxito (simulación automática) */
+button.success {
+  background: var(--green2);
+  border-color: var(--green2);
+}
+
+/* Botón pequeño para usos inline */
+button.small {
+  padding: 4px 10px;
+  font-size: 11px;
+  width: auto;
+  margin: 0;
+}
+
+
+/* ───────────────────────────────────────────────
+   8. LISTA DE PROGRAMAS
+   Cada tarjeta representa un programa del sistema
+─────────────────────────────────────────────── */
+
+/* Tarjeta de programa */
+.prog-item {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  position: relative;
+}
+
+.prog-item:hover {
+  border-color: var(--border2);
+}
+
+/* Estado: programa seleccionado actualmente */
+.prog-item.selected {
+  border-color: var(--accent);
+}
+
+/* Estado: programa ya cargado en RAM */
+.prog-item.in-memory {
+  border-color: var(--green2);
+}
+
+/* Nombre del programa */
+.prog-name {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: bold;
+}
+
+/* Tamaño del programa en RAM */
+.prog-size {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+/* Etiqueta de estado: "EN RAM" o "EN DISCO" */
+.prog-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  letter-spacing: 0.3px;
+}
+
+/* Badge verde: proceso está en memoria RAM */
+.badge-mem {
+  background: #1a3a2a;
+  color: var(--green);
+}
+
+/* Badge morado: proceso está solo en disco */
+.badge-disk {
+  background: #2a1a3a;
+  color: #9060ff;
+}
+
+
+/* ───────────────────────────────────────────────
+   9. BARRA DE SEGMENTOS DEL PROCESO
+   Muestra proporcionalmente los segmentos:
+   HEADER | .text | .data | .bss | .heap | .stack
+─────────────────────────────────────────────── */
+.seg-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+  gap: 1px;
+}
+
+/* Cada parte proporcional de la barra */
+.seg-part {
+  height: 100%;
+  transition: flex 0.3s;
+}
+
+
+/* ───────────────────────────────────────────────
+   10. MAPA VISUAL DE MEMORIA
+   Columna vertical que representa las 16 MiB de RAM
+─────────────────────────────────────────────── */
+
+/* Encabezado del mapa con título y chips de estadísticas */
+.mem-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.mem-title {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: bold;
+}
+
+/* Chips de estadísticas (usado / libre) */
+.mem-stats {
+  display: flex;
+  gap: 12px;
+}
+
+.stat-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+}
+
+.stat-chip.used {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.stat-chip.free {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* Fila que contiene: etiquetas hex | mapa | tabla */
+.mem-map-container {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+/* Columna del mapa visual */
+.mem-map {
+  width: 120px;
+  flex-shrink: 0;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Cada bloque individual dentro del mapa (una partición) */
+.mem-block {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: bold;
+  letter-spacing: 0.2px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+  cursor: default;
+  transition: filter 0.15s;
+  position: relative;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.mem-block:hover {
+  filter: brightness(1.2);
+}
+
+/* Texto dentro del bloque de memoria (PID o "FREE") */
+.mem-block-text {
+  font-size: 9px;
+  text-align: center;
+  line-height: 1.2;
+  padding: 2px 3px;
+  pointer-events: none;
+}
+
+/* Columna lateral con etiquetas de particiones */
+.ptable {
+  flex: 1;
+  overflow: auto;
+}
+
+
+/* ───────────────────────────────────────────────
+   11. ETIQUETAS DE DIRECCIÓN HEX
+   Anotaciones a la izquierda del mapa (0x000000…)
+─────────────────────────────────────────────── */
+.addr-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text3);
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.addr-label {
+  white-space: nowrap;
+}
+
+
+/* ───────────────────────────────────────────────
+   12. TABLA DE PARTICIONES
+   Descripción detallada de cada partición/bloque
+─────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+/* Encabezados de columna */
+th {
+  background: var(--bg3);
+  color: var(--text3);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Celdas de datos */
+td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+  vertical-align: middle;
+}
+
+/* Resalte suave al hacer hover sobre una fila */
+tr:hover td {
+  background: rgba(108, 99, 255, 0.05);
+}
+
+/* Celda con el ID del proceso */
+.pid-cell {
+  font-weight: bold;
+}
+
+/* PID del Sistema Operativo (más tenue) */
+.pid-SO {
+  color: var(--text3);
+}
+
+/* Punto de estado de color junto al tipo de partición */
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 5px;
+}
+
+.dot-free { background: var(--green); }   /* bloque libre */
+.dot-used { background: var(--red); }     /* bloque ocupado por proceso */
+.dot-so   { background: var(--text3); }   /* bloque del sistema operativo */
+.dot-frag { background: var(--amber); }   /* fragmentación */
+
+/* Fila resaltada para procesos cargados */
+.highlight-row td {
+  background: rgba(45, 206, 137, 0.08) !important;
+}
+
+
+/* ───────────────────────────────────────────────
+   13. PANEL DE FRAGMENTACIÓN
+─────────────────────────────────────────────── */
+
+/* Aviso naranja cuando hay fragmentación externa significativa */
+.frag-warn {
+  background: rgba(251, 99, 64, 0.1);
+  border: 1px solid rgba(251, 99, 64, 0.3);
+  border-radius: 5px;
+  padding: 8px 12px;
+  color: var(--amber);
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+
+/* Barra de progreso de fragmentación interna (naranja) */
+.int-frag-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border2);
+  overflow: hidden;
+  margin-top: 3px;
+}
+
+.int-frag-fill {
+  height: 100%;
+  background: var(--amber);
+  border-radius: 3px;
+}
+
+/* Barra de fragmentación externa (rojo) */
+.ext-frag-fill {
+  height: 100%;
+  background: var(--red);
+  border-radius: 3px;
+}
+
+
+/* ───────────────────────────────────────────────
+   14. DETALLES DEL PROCESO (panel derecho)
+─────────────────────────────────────────────── */
+
+/* Tarjeta de información genérica */
+.info-box {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+
+/* Etiqueta dentro del info-box */
+.info-box .label {
+  color: var(--text3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+/* Valor destacado dentro del info-box */
+.info-box .value {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: bold;
+}
+
+
+/* ───────────────────────────────────────────────
+   15. LOG DE EVENTOS
+─────────────────────────────────────────────── */
+
+/* Lista de entradas del log */
+.log-list {
+  list-style: none;
+}
+
+/* Entrada individual del log */
+.log-item {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.4;
+}
+
+/* Marca de tiempo en el log */
+.log-item .log-time {
+  color: var(--text3);
+  font-size: 10px;
+  margin-right: 5px;
+}
+
+/* Colores semánticos para mensajes del log */
+.log-ok   { color: var(--green); }   /* carga exitosa */
+.log-err  { color: var(--red); }     /* error (sin espacio, etc.) */
+.log-warn { color: var(--amber); }   /* advertencia */
+.log-info { color: var(--cyan); }    /* información general */
+
+
+/* ───────────────────────────────────────────────
+   16. UTILIDADES VARIAS
+─────────────────────────────────────────────── */
+
+/* Grid de dos columnas para tarjetas de estadísticas */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Leyenda de colores */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text2);
+}
+
+.legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* Fila con checkbox y etiqueta */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.check-row input[type=checkbox] {
+  width: auto;
+}
+
+.check-row label {
+  font-size: 11px;
+  color: var(--text2);
+}
