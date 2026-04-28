@@ -4,15 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Simulador de Gestión de Memoria — 16 MiB</title>
-
-  <!-- Hoja de estilos externa -->
   <link rel="stylesheet" href="simulador_memoria.css" />
 </head>
 <body>
 
   <!-- ═══════════════════════════════════════════════════════
        ENCABEZADO PRINCIPAL
-       Muestra el nombre del simulador y el rango de direcciones
   ═══════════════════════════════════════════════════════ -->
   <header>
     <div>
@@ -26,14 +23,13 @@
        DISEÑO PRINCIPAL DE TRES COLUMNAS
        Izquierda: controles y lista de programas
        Centro:    mapa visual de memoria y tabla de particiones
-       Derecha:   detalles del proceso y log de eventos
+       Derecha:   formulario personalizado, detalles y log
   ═══════════════════════════════════════════════════════ -->
   <div class="main-layout">
 
     <!-- ── PANEL IZQUIERDO: Controles ── -->
     <div class="panel" id="leftPanel">
 
-      <!-- Sección: selección del método de gestión -->
       <div class="panel-title">Método de Gestión</div>
 
       <div class="ctrl-section">
@@ -47,9 +43,8 @@
       </div>
 
       <!--
-        Selector de algoritmo de asignación.
-        Visible para: estáticas de tamaño variable, dinámicas sin/con compactación.
-        Oculto para:  estáticas de tamaño fijo (no aplica algoritmo).
+        Selector de algoritmo: visible para estáticas variables y dinámicas.
+        Oculto en estáticas fijas (allí no se elige algoritmo).
       -->
       <div id="algorithmRow" class="ctrl-section" style="display:none">
         <div class="ctrl-label">Algoritmo de Asignación</div>
@@ -60,10 +55,7 @@
         </select>
       </div>
 
-      <!--
-        Selector del tamaño de partición fija.
-        Solo visible en el modo "Estáticas de Tamaño Fijo".
-      -->
+      <!-- Selector de tamaño de partición: solo en modo fijo -->
       <div id="fixedPartRow" class="ctrl-section" style="display:none">
         <div class="ctrl-label">Tamaño de Partición</div>
         <select id="partSizeSelect" onchange="onMethodChange()">
@@ -75,39 +67,28 @@
 
       <div class="divider"></div>
 
-      <!-- Sección: lista de programas disponibles -->
+      <!-- Lista de programas (predefinidos del Excel + personalizados) -->
       <div class="panel-title">Programas del Sistema</div>
       <div id="programsList"></div>
 
       <div class="divider"></div>
 
-      <!-- Sección: botones de acción sobre la memoria -->
+      <!-- Botones de control sobre la memoria -->
       <div class="ctrl-section">
         <div class="ctrl-label">Acciones</div>
-
-        <!-- Carga el proceso seleccionado en RAM -->
         <button onclick="loadSelectedProcess()" id="btnLoad">▶ Cargar Proceso</button>
-
-        <!-- Libera el proceso seleccionado de RAM -->
         <button onclick="unloadSelectedProcess()" id="btnUnload" class="danger" style="margin-top:6px">
           ✕ Terminar Proceso
         </button>
-
-        <!-- Reinicia la simulación borrando todos los procesos cargados -->
         <button onclick="resetMemory()" class="secondary" style="margin-top:6px">
           ↺ Resetear Memoria
         </button>
-
-        <!-- Avanza un paso en la simulación automática (T1 → T6) -->
         <button onclick="runAutoSimulation()" class="success" style="margin-top:6px" id="btnAuto">
           ⚡ Simulación Auto (T1–T6)
         </button>
       </div>
 
-      <!--
-        Botón de compactación: solo visible en el modo dinámico con compactación.
-        Mueve todos los procesos al área baja de RAM para consolidar el espacio libre.
-      -->
+      <!-- Botón de compactación: solo visible en modo dinámico con compactación -->
       <div id="compactBtnWrap" style="display:none">
         <button onclick="doCompact()" class="secondary" style="margin-top:6px">
           ⊡ Compactar Memoria
@@ -120,7 +101,6 @@
     <!-- ── PANEL CENTRAL: Mapa de Memoria ── -->
     <div class="center-panel" id="centerPanel">
 
-      <!-- Encabezado del mapa con título dinámico y chips de estadísticas -->
       <div class="mem-header">
         <div class="mem-title" id="mapTitle">Mapa de Memoria — Particiones Estáticas Fijas</div>
         <div class="mem-stats">
@@ -129,12 +109,12 @@
         </div>
       </div>
 
-      <!-- Contenedor donde se renderizan: etiquetas de dirección + mapa visual + tabla lateral -->
+      <!-- Contenedor del mapa visual + etiquetas de dirección + tabla lateral -->
       <div class="mem-map-container" id="memMapContainer"></div>
 
       <div class="divider"></div>
 
-      <!-- Tabla de descripción detallada de todas las particiones -->
+      <!-- Tabla detallada de todas las particiones -->
       <div class="compact-title">Tabla de Descripción de Particiones</div>
       <div style="overflow-x:auto; margin-top:8px;">
         <table id="partTable">
@@ -154,7 +134,7 @@
         </table>
       </div>
 
-      <!-- Sección de análisis de fragmentación (interna y externa) -->
+      <!-- Panel de análisis de fragmentación interna y externa -->
       <div id="fragSection" style="margin-top:14px; display:none">
         <div class="compact-title">Análisis de Fragmentación</div>
         <div class="two-col" style="margin-top:8px" id="fragStats"></div>
@@ -163,10 +143,10 @@
     </div><!-- /panel central -->
 
 
-    <!-- ── PANEL DERECHO: Detalles y Log ── -->
+    <!-- ── PANEL DERECHO: Detalles + Proceso Personalizado + Log ── -->
     <div class="right-panel" id="rightPanel">
 
-      <!-- Información detallada del proceso seleccionado y sus segmentos -->
+      <!-- Detalles del proceso seleccionado -->
       <div class="panel-title">Detalles del Proceso</div>
       <div id="processDetail">
         <div style="color:var(--text3); font-size:11px; margin-top:8px;">
@@ -176,7 +156,85 @@
 
       <div class="divider"></div>
 
-      <!-- Lista de bloques libres actuales en memoria -->
+      <!-- ══════════════════════════════════════════
+           FORMULARIO: PROCESO PERSONALIZADO
+           El usuario define sus propios segmentos.
+           .heap (128 KiB) y .stack (64 KiB) son fijos
+           igual que en los procesos predefinidos del Excel.
+           Los procesos creados aparecen en la lista del
+           panel izquierdo y se cargan/descargan manualmente.
+      ══════════════════════════════════════════ -->
+      <div class="panel-title">Nuevo Proceso Personalizado</div>
+
+      <div class="custom-form" id="customForm">
+
+        <!-- Nombre del proceso -->
+        <div class="form-row">
+          <label class="form-label" for="cName">Nombre</label>
+          <input type="text" id="cName" placeholder="Ej: MiApp" maxlength="16"
+                 oninput="updateSizePreview()" />
+        </div>
+
+        <!-- Segmento .text: código ejecutable -->
+        <div class="form-row">
+          <label class="form-label">
+            .text (código)
+            <span class="form-hint">bytes</span>
+          </label>
+          <input type="number" id="cCode" placeholder="Ej: 51200"
+                 min="1" max="10000000" oninput="updateSizePreview()" />
+        </div>
+
+        <!-- Segmento .data: variables globales inicializadas -->
+        <div class="form-row">
+          <label class="form-label">
+            .data (inicializ.)
+            <span class="form-hint">bytes</span>
+          </label>
+          <input type="number" id="cData" placeholder="Ej: 20480"
+                 min="0" max="10000000" oninput="updateSizePreview()" />
+        </div>
+
+        <!-- Segmento .bss: variables globales sin inicializar -->
+        <div class="form-row">
+          <label class="form-label">
+            .bss (sin inic.)
+            <span class="form-hint">bytes</span>
+          </label>
+          <input type="number" id="cBss" placeholder="Ej: 4096"
+                 min="0" max="10000000" oninput="updateSizePreview()" />
+        </div>
+
+        <!-- Chips informativos de segmentos con valores fijos -->
+        <div class="fixed-segs-note">
+          <span class="fixed-seg-chip" title="Cabecera del ejecutable, fija en todos los procesos">HEADER = 767 B</span>
+          <span class="fixed-seg-chip" title="Montículo del proceso, fijo en 128 KiB">.heap = 128 KiB</span>
+          <span class="fixed-seg-chip" title="Pila del proceso, fija en 64 KiB">.stack = 64 KiB</span>
+        </div>
+
+        <!-- Vista previa del tamaño total en RAM calculada en tiempo real -->
+        <div class="size-preview" id="sizePreview">
+          Tamaño en RAM: <span id="previewVal">—</span>
+        </div>
+
+        <!-- Mensaje de error de validación del formulario -->
+        <div class="form-error" id="formError" style="display:none"></div>
+
+        <!-- Botones del formulario -->
+        <div style="display:flex; gap:6px; margin-top:10px;">
+          <button onclick="createCustomProcess()" style="flex:1;">
+            + Crear Proceso
+          </button>
+          <button onclick="clearCustomForm()" class="secondary"
+                  style="flex:0 0 auto; width:auto; padding:7px 12px;"
+                  title="Limpiar formulario">✕</button>
+        </div>
+
+      </div><!-- /customForm -->
+
+      <div class="divider"></div>
+
+      <!-- Lista de bloques libres actuales en RAM -->
       <div class="panel-title">Fragmentos Libres</div>
       <div id="freeFragList" style="font-size:11px; color:var(--text3);">—</div>
 
@@ -190,7 +248,7 @@
 
   </div><!-- /main-layout -->
 
-  <!-- Script principal — cargado al final para que el DOM esté listo -->
+  <!-- Script principal cargado al final para que el DOM esté listo -->
   <script src="simulador_memoria.js"></script>
 
 </body>

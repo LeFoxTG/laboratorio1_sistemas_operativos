@@ -13,14 +13,27 @@
  *   4. Particiones DINÁMICAS con compactación
  *      - Algoritmos: Primer Ajuste | Mejor Ajuste | Peor Ajuste
  *
- * Basado en el ejercicio de clase (ejercicio_clase_memoria.xlsx)
+ * Secciones:
+ *   1.  Constantes del sistema
+ *   2.  Datos de programas predefinidos (del ejercicio Excel)
+ *   3.  Estado global de la simulación
+ *   4.  Línea de tiempo de simulación automática (T1–T6)
+ *   5.  Inicialización
+ *   6.  Inicialización de particiones según el método
+ *   7.  Algoritmos de asignación (First/Best/Worst Fit)
+ *   8.  Carga y liberación de procesos
+ *   9.  Procesos personalizados  ← nuevo
+ *   10. Acciones de la interfaz de usuario
+ *   11. Renderizado de la interfaz
+ *   12. Funciones auxiliares (helpers)
+ *   13. Atajos de teclado
+ *   14. Arranque
  * ═══════════════════════════════════════════════════════════════
  */
 
 
 /* ═══════════════════════════════════════════════
    SECCIÓN 1: CONSTANTES DEL SISTEMA
-   Valores fijos que representan el hardware simulado
 ═══════════════════════════════════════════════ */
 
 /** Tamaño total de RAM: 16 MiB = 16,777,216 bytes */
@@ -28,56 +41,70 @@ const RAM = 16 * 1024 * 1024;
 
 /**
  * Espacio reservado para el Sistema Operativo: 1 MiB
- * Composición (del ejercicio de clase):
- *   - Pila del SO:     64 KiB (65,536 bytes)
+ *   - Pila del SO:      64 KiB (65,536 bytes)
  *   - Montículo del SO: 128 KiB (131,072 bytes)
- *   - EXE Header:      767 bytes
- *   - Resto reservado: hasta completar 1 MiB
+ *   - EXE Header:       767 bytes
+ *   - Resto reservado hasta completar 1 MiB
  */
-const SO_SIZE = 1_048_576; // 1 MiB
+const SO_SIZE = 1_048_576;
+
+/** Tamaño fijo del montículo de cada proceso: 128 KiB */
+const HEAP_SIZE  = 131_072;
+/** Tamaño fijo de la pila de cada proceso: 64 KiB */
+const STACK_SIZE =  65_536;
+/** Tamaño fijo de la cabecera EXE de cada proceso: 767 bytes */
+const HEADER_SIZE =    767;
 
 /**
- * Mapa de colores por ID de proceso para el mapa visual de RAM.
- * Cada proceso tiene un color distintivo para identificación rápida.
+ * Colores asignados a cada proceso para el mapa visual de RAM.
+ * Los procesos personalizados reciben colores de la paleta CUSTOM_COLORS.
  */
 const PROC_COLORS = {
-  SO: '#4a4a6a',  // Sistema Operativo — gris azulado oscuro
-  P1: '#6c3fc8',  // Notepad          — morado
-  P2: '#2060c8',  // Word              — azul
-  P3: '#207060',  // Excel             — verde oscuro
-  P4: '#c86030',  // AutoCAD           — naranja
-  P5: '#806020',  // Calculadora       — marrón dorado
-  P6: '#c03060',  // p1 Grande         — rojo rosado
-  P7: '#208060',  // p2 Mediano        — verde teal
-  P8: '#604080',  // p3 Grande         — violeta
+  SO: '#4a4a6a',
+  P1: '#6c3fc8',
+  P2: '#2060c8',
+  P3: '#207060',
+  P4: '#c86030',
+  P5: '#806020',
+  P6: '#c03060',
+  P7: '#208060',
+  P8: '#604080',
 };
+
+/**
+ * Paleta de colores para procesos personalizados del usuario.
+ * Se asignan de forma rotatoria (cíclica) según el índice del proceso.
+ */
+const CUSTOM_COLORS = [
+  '#b07020', // ámbar oscuro
+  '#208080', // teal oscuro
+  '#803080', // magenta oscuro
+  '#406030', // verde oliva
+  '#704040', // marrón rojizo
+  '#304070', // azul marino
+  '#707020', // amarillo oscuro
+  '#507050', // verde grisáceo
+];
 
 
 /* ═══════════════════════════════════════════════
-   SECCIÓN 2: DATOS DE LOS PROGRAMAS SIMULADOS
-   Extraídos directamente del archivo Excel de clase.
-   Cada programa tiene sus tamaños de segmentos reales.
+   SECCIÓN 2: DATOS DE LOS PROGRAMAS PREDEFINIDOS
+   Extraídos del ejercicio de clase (Excel).
 
-   Fórmula del tamaño en RAM (memSize):
-     header(767) + código + datos_init + bss + heap(128K) + pila(64K)
+   Fórmula del tamaño en RAM:
+     memSize = HEADER(767) + code + data + bss + HEAP(128K) + STACK(64K)
 ═══════════════════════════════════════════════ */
 const PROGRAMS = [
   {
     id: 'P1', name: 'Notepad',
-    diskSize:   33_808,     // tamaño en disco (bytes)
-    code:       19_524,     // segmento .text  (código ejecutable)
-    dataInit:   12_352,     // segmento .data  (datos inicializados)
-    dataBss:     1_165,     // segmento .bss   (datos sin inicializar)
-    memInitial: 33_041,     // memoria mínima al arrancar
-    memSize:   224_649,     // TAMAÑO TOTAL en RAM como proceso
-    segments: {
-      header:  767,         // cabecera EXE
-      code:    19_524,
-      data:    12_352,
-      bss:      1_165,
-      heap:   131_072,      // montículo = 128 KiB
-      stack:   65_536,      // pila      = 64 KiB
-    }
+    diskSize:   33_808,
+    code:       19_524,   // .text: código ejecutable
+    dataInit:   12_352,   // .data: datos inicializados
+    dataBss:     1_165,   // .bss:  datos sin inicializar
+    memInitial: 33_041,
+    memSize:   224_649,
+    segments: { header: HEADER_SIZE, code: 19_524, data: 12_352, bss:  1_165, heap: HEAP_SIZE, stack: STACK_SIZE },
+    custom: false,
   },
   {
     id: 'P2', name: 'Word',
@@ -87,7 +114,8 @@ const PROGRAMS = [
     dataBss:      4_100,
     memInitial: 114_319,
     memSize:    286_708,
-    segments: { header: 767, code: 77_539, data: 32_680, bss: 4_100, heap: 131_072, stack: 65_536 }
+    segments: { header: HEADER_SIZE, code: 77_539, data: 32_680, bss:  4_100, heap: HEAP_SIZE, stack: STACK_SIZE },
+    custom: false,
   },
   {
     id: 'P3', name: 'Excel',
@@ -97,7 +125,8 @@ const PROGRAMS = [
     dataBss:      7_557,
     memInitial: 131_344,
     memSize:    309_150,
-    segments: { header: 767, code: 99_542, data: 24_245, bss: 7_557, heap: 131_072, stack: 65_536 }
+    segments: { header: HEADER_SIZE, code: 99_542, data: 24_245, bss:  7_557, heap: HEAP_SIZE, stack: STACK_SIZE },
+    custom: false,
   },
   {
     id: 'P4', name: 'AutoCAD',
@@ -107,7 +136,8 @@ const PROGRAMS = [
     dataBss:      1_123,
     memInitial: 239_593,
     memSize:    436_201,
-    segments: { header: 767, code: 115_000, data: 123_470, bss: 1_123, heap: 131_072, stack: 65_536 }
+    segments: { header: HEADER_SIZE, code: 115_000, data: 123_470, bss:  1_123, heap: HEAP_SIZE, stack: STACK_SIZE },
+    custom: false,
   },
   {
     id: 'P5', name: 'Calculadora',
@@ -117,7 +147,8 @@ const PROGRAMS = [
     dataBss:      1_756,
     memInitial:  15_354,
     memSize:    209_462,
-    segments: { header: 767, code: 12_342, data: 1_256, bss: 1_756, heap: 131_072, stack: 65_536 }
+    segments: { header: HEADER_SIZE, code: 12_342, data:  1_256, bss:  1_756, heap: HEAP_SIZE, stack: STACK_SIZE },
+    custom: false,
   },
   {
     id: 'P6', name: 'p1 (Grande)',
@@ -127,7 +158,8 @@ const PROGRAMS = [
     dataBss:      51_000,
     memInitial: 3_800_000,
     memSize:   3_996_608,
-    segments: { header: 767, code: 525_000, data: 3_224_000, bss: 51_000, heap: 131_072, stack: 65_536 }
+    segments: { header: HEADER_SIZE, code: 525_000, data: 3_224_000, bss: 51_000, heap: HEAP_SIZE, stack: STACK_SIZE },
+    custom: false,
   },
   {
     id: 'P7', name: 'p2 (Mediano)',
@@ -137,7 +169,8 @@ const PROGRAMS = [
     dataBss:      25_000,
     memInitial: 1_589_000,
     memSize:   1_785_608,
-    segments: { header: 767, code: 590_000, data: 974_000, bss: 25_000, heap: 131_072, stack: 65_536 }
+    segments: { header: HEADER_SIZE, code: 590_000, data: 974_000, bss: 25_000, heap: HEAP_SIZE, stack: STACK_SIZE },
+    custom: false,
   },
   {
     id: 'P8', name: 'p3 (Grande)',
@@ -147,55 +180,64 @@ const PROGRAMS = [
     dataBss:       1_000,
     memInitial: 2_500_000,
     memSize:   2_696_608,
-    segments: { header: 767, code: 349_000, data: 2_150_000, bss: 1_000, heap: 131_072, stack: 65_536 }
+    segments: { header: HEADER_SIZE, code: 349_000, data: 2_150_000, bss: 1_000, heap: HEAP_SIZE, stack: STACK_SIZE },
+    custom: false,
   },
 ];
 
 
 /* ═══════════════════════════════════════════════
    SECCIÓN 3: ESTADO GLOBAL DE LA SIMULACIÓN
-   Objeto central que guarda toda la información
-   de la simulación en cada momento.
 ═══════════════════════════════════════════════ */
 
 /**
  * Estado global del simulador.
  *
- * partitions: Array de objetos de partición con la forma:
+ * partitions: Array de particiones con la estructura:
  *   {
  *     id:        identificador único,
- *     pid:       'SO' | 'P1'…'P8' | null,
+ *     pid:       'SO' | 'P1'…'P8' | 'CX' | null,
  *     type:      'so' | 'process' | 'free',
- *     base:      dirección de inicio (bytes),
+ *     base:      dirección de inicio (bytes, decimal),
  *     size:      tamaño de la partición (bytes),
  *     allocSize: bytes realmente usados por el proceso (≤ size)
  *   }
+ *
+ * customPrograms: Array de procesos personalizados creados por el usuario.
+ *   Comparten la misma estructura que PROGRAMS y se listan junto a ellos,
+ *   pero nunca forman parte de la línea de tiempo automática T1–T6.
+ *
+ * customCounter: Contador para generar IDs únicos (C1, C2, C3…).
+ * customColorIdx: Índice rotatorio en CUSTOM_COLORS para asignar colores.
  */
 const state = {
-  method:      'fixed',    // método de gestión activo
-  algorithm:   'first',    // algoritmo de asignación (first|best|worst)
-  partSize:    1_048_576,  // tamaño de partición fija (solo modo fixed)
-  partitions:  [],         // lista de particiones en RAM
-  selectedProg: null,      // ID del programa seleccionado en la UI
-  simStep:     0,          // paso actual en la simulación automática T1–T6
+  method:          'fixed',
+  algorithm:       'first',
+  partSize:        1_048_576,
+  partitions:      [],
+  selectedProg:    null,
+  simStep:         0,
+  customPrograms:  [],    // procesos personalizados del usuario
+  customCounter:   0,     // contador de IDs únicos para procesos personalizados
+  customColorIdx:  0,     // índice rotatorio de colores para personalizados
 };
 
 
 /* ═══════════════════════════════════════════════
    SECCIÓN 4: LÍNEA DE TIEMPO DE SIMULACIÓN
-   Replica los instantes T1–T6 del ejercicio Excel
-   para cada método de gestión.
-   Cada entrada es el conjunto de procesos que
-   deben estar en RAM en ese momento.
+   Replica los instantes T1–T6 del ejercicio Excel.
+   Solo incluye procesos predefinidos (P1–P8).
+   Los procesos personalizados (C1, C2…) son siempre
+   de control manual y no entran en esta secuencia.
 ═══════════════════════════════════════════════ */
 const SIM_TIMELINE = {
   fixed: [
-    ['P4'],               // T1: solo AutoCAD
-    ['P3', 'P4'],         // T2: Excel + AutoCAD
-    ['P5', 'P4'],         // T3: Calculadora + AutoCAD
-    ['P2', 'P5'],         // T4: Word + Calculadora
-    ['P1', 'P3'],         // T5: Notepad + Excel
-    ['P2'],               // T6: solo Word
+    ['P4'],
+    ['P3', 'P4'],
+    ['P5', 'P4'],
+    ['P2', 'P5'],
+    ['P1', 'P3'],
+    ['P2'],
   ],
   variable: [
     ['P4'],
@@ -228,43 +270,29 @@ const SIM_TIMELINE = {
    SECCIÓN 5: INICIALIZACIÓN
 ═══════════════════════════════════════════════ */
 
-/**
- * Punto de entrada de la aplicación.
- * Se invoca desde window.onload en el HTML.
- */
+/** Punto de entrada: inicializa la UI y renderiza el estado inicial. */
 function init() {
   renderProgramsList();
-  onMethodChange(); // aplica el método por defecto y renderiza
+  onMethodChange();
 }
 
-/**
- * Manejador del selector de método de gestión.
- * Actualiza el estado, muestra/oculta controles relevantes
- * y reinicia la memoria con la nueva configuración.
- */
+/** Manejador del selector de método de gestión. */
 function onMethodChange() {
   const m = document.getElementById('methodSelect').value;
-  state.method = m;
+  state.method    = m;
   state.algorithm = document.getElementById('algorithmSelect').value;
 
-  // Determinar visibilidad de controles según el método
   const isDynamic  = (m === 'dynamic' || m === 'dynamic_compact');
   const isVariable = (m === 'variable');
   const isFixed    = (m === 'fixed');
 
-  // El selector de algoritmo aplica a variables y dinámicas
   document.getElementById('algorithmRow').style.display =
     (isDynamic || isVariable) ? 'block' : 'none';
-
-  // El selector de tamaño de partición fija solo aplica en modo fijo
   document.getElementById('fixedPartRow').style.display =
     isFixed ? 'block' : 'none';
-
-  // El botón de compactar solo existe en modo dinámico con compactación
   document.getElementById('compactBtnWrap').style.display =
     (m === 'dynamic_compact') ? 'block' : 'none';
 
-  // Actualizar el título del mapa de memoria
   const titles = {
     fixed:           'Mapa de Memoria — Particiones Estáticas Fijas',
     variable:        'Mapa de Memoria — Particiones Estáticas Variables',
@@ -273,15 +301,11 @@ function onMethodChange() {
   };
   document.getElementById('mapTitle').textContent = titles[m];
 
-  // Reiniciar la simulación con el nuevo método
   state.simStep = 0;
   resetMemory(true);
 }
 
-/**
- * Manejador del selector de algoritmo.
- * Solo actualiza el estado; la próxima asignación usará el nuevo algoritmo.
- */
+/** Manejador del selector de algoritmo: actualiza el estado. */
 function onAlgorithmChange() {
   state.algorithm = document.getElementById('algorithmSelect').value;
   addLog(`Algoritmo cambiado a: ${algName()}`, 'info');
@@ -289,7 +313,8 @@ function onAlgorithmChange() {
 
 /**
  * Reinicia la memoria al estado inicial del método activo.
- * @param {boolean} silent - Si es true, no agrega entrada al log.
+ * Los procesos personalizados se conservan en la lista pero se descargan de RAM.
+ * @param {boolean} silent - Si true, no agrega entrada al log.
  */
 function resetMemory(silent = false) {
   state.partitions = [];
@@ -302,91 +327,64 @@ function resetMemory(silent = false) {
 
 /* ═══════════════════════════════════════════════
    SECCIÓN 6: INICIALIZACIÓN DE PARTICIONES
-   Configura la estructura inicial de RAM según
-   el método de gestión seleccionado.
 ═══════════════════════════════════════════════ */
 
-/**
- * Crea la distribución inicial de particiones en RAM
- * según el método de gestión activo.
- */
+/** Crea la distribución inicial de particiones según el método activo. */
 function initPartitions() {
   const m = state.method;
   state.partitions = [];
 
-  if (m === 'fixed') {
-    initFixedPartitions();
-  } else if (m === 'variable') {
-    initVariablePartitions();
-  } else {
-    // Dinámicas (con o sin compactación): inicio idéntico
-    initDynamicPartitions();
-  }
+  if      (m === 'fixed')    initFixedPartitions();
+  else if (m === 'variable') initVariablePartitions();
+  else                       initDynamicPartitions();
 }
 
 /**
- * Particiones ESTÁTICAS DE TAMAÑO FIJO.
- * Divide toda la RAM en N bloques iguales del tamaño seleccionado.
- * El primer bloque siempre es del Sistema Operativo.
- * Los bloques donde el proceso no llena la partición
- * generan FRAGMENTACIÓN INTERNA.
+ * Estáticas de Tamaño Fijo:
+ * Divide toda la RAM en N bloques iguales del tamaño elegido.
+ * El primer bloque es del SO; el resto inicia como libre.
+ * El espacio sobrante dentro de una partición es fragmentación interna.
  */
 function initFixedPartitions() {
   const sz = parseInt(document.getElementById('partSizeSelect')?.value || '1048576');
   state.partSize = sz;
-
-  let addr = 0;
-  let id   = 0;
-
+  let addr = 0, id = 0;
   while (addr < RAM) {
-    const partSz = Math.min(sz, RAM - addr); // última partición puede ser menor
+    const partSz = Math.min(sz, RAM - addr);
     state.partitions.push({
-      id:        id++,
-      pid:       addr === 0 ? 'SO' : null,
-      type:      addr === 0 ? 'so' : 'free',
-      base:      addr,
-      size:      partSz,
+      id, pid: addr === 0 ? 'SO' : null,
+      type: addr === 0 ? 'so' : 'free',
+      base: addr, size: partSz,
       allocSize: addr === 0 ? partSz : 0,
     });
     addr += partSz;
+    id++;
   }
 }
 
 /**
- * Particiones ESTÁTICAS DE TAMAÑO VARIABLE.
- * Distribución tomada directamente del ejercicio Excel:
- *   - 1 partición de 1 MiB para el SO
- *   - 2 particiones de 512 KiB
- *   - 2 particiones de 1 MiB
- *   - 2 particiones de 2 MiB
- *   - 2 particiones de 4 MiB
- * Total: 16 MiB exactos.
- *
- * El tamaño de cada partición es FIJO una vez definido,
- * pero los procesos se asignan según el algoritmo elegido
- * (Primer Ajuste, Mejor Ajuste, Peor Ajuste).
+ * Estáticas de Tamaño Variable:
+ * Distribución del ejercicio Excel: 1MiB SO + 512K + 512K + 1M + 1M + 2M + 2M + 4M + 4M.
+ * Los tamaños son fijos una vez definidos, pero el algoritmo elige en qué partición carga
+ * cada proceso (Primer Ajuste, Mejor Ajuste o Peor Ajuste).
  */
 function initVariablePartitions() {
   const layout = [
-    { size: 1_048_576, type: 'so',   pid: 'SO' },  // 1 MiB — Sistema Operativo
-    { size:   524_288, type: 'free', pid: null  },  // 512 KiB
-    { size:   524_288, type: 'free', pid: null  },  // 512 KiB
-    { size: 1_048_576, type: 'free', pid: null  },  // 1 MiB
-    { size: 1_048_576, type: 'free', pid: null  },  // 1 MiB
-    { size: 2_097_152, type: 'free', pid: null  },  // 2 MiB
-    { size: 2_097_152, type: 'free', pid: null  },  // 2 MiB
-    { size: 4_194_304, type: 'free', pid: null  },  // 4 MiB
-    { size: 4_194_304, type: 'free', pid: null  },  // 4 MiB
+    { size: 1_048_576, type: 'so',   pid: 'SO' },
+    { size:   524_288, type: 'free', pid: null  },
+    { size:   524_288, type: 'free', pid: null  },
+    { size: 1_048_576, type: 'free', pid: null  },
+    { size: 1_048_576, type: 'free', pid: null  },
+    { size: 2_097_152, type: 'free', pid: null  },
+    { size: 2_097_152, type: 'free', pid: null  },
+    { size: 4_194_304, type: 'free', pid: null  },
+    { size: 4_194_304, type: 'free', pid: null  },
   ];
-
   let addr = 0;
   layout.forEach((p, i) => {
     state.partitions.push({
-      id:        i,
-      pid:       p.pid,
-      type:      p.type,
-      base:      addr,
-      size:      p.size,
+      id: i, pid: p.pid, type: p.type,
+      base: addr, size: p.size,
       allocSize: p.type === 'so' ? p.size : 0,
     });
     addr += p.size;
@@ -394,42 +392,31 @@ function initVariablePartitions() {
 }
 
 /**
- * Particiones DINÁMICAS (sin o con compactación).
- * Al inicio solo existe el bloque del SO y un gran bloque libre.
- * Los bloques se crean y destruyen dinámicamente según los
- * procesos que se cargan y liberan.
+ * Dinámicas (sin o con compactación):
+ * Al inicio solo existe el bloque del SO y un único bloque libre.
+ * Los bloques se crean/destruyen dinámicamente al cargar y liberar procesos.
  */
 function initDynamicPartitions() {
   state.partitions = [
-    {
-      id: 0, pid: 'SO', type: 'so',
-      base: 0, size: SO_SIZE, allocSize: SO_SIZE,
-    },
-    {
-      id: 1, pid: null, type: 'free',
-      base: SO_SIZE, size: RAM - SO_SIZE, allocSize: 0,
-    },
+    { id: 0, pid: 'SO', type: 'so',  base: 0,       size: SO_SIZE,       allocSize: SO_SIZE },
+    { id: 1, pid: null, type: 'free', base: SO_SIZE, size: RAM - SO_SIZE, allocSize: 0       },
   ];
 }
 
 
 /* ═══════════════════════════════════════════════
    SECCIÓN 7: ALGORITMOS DE ASIGNACIÓN
-   Implementación de los tres algoritmos clásicos:
-   Primer Ajuste, Mejor Ajuste y Peor Ajuste.
 ═══════════════════════════════════════════════ */
 
 /**
- * Selecciona una partición libre usando el algoritmo de asignación activo.
+ * Selecciona una partición libre según el algoritmo activo.
  *
- * @param {Array}  freeList - Lista de particiones libres candidatas
- * @param {number} reqSize  - Tamaño requerido en bytes
- * @returns {Object|null} La partición elegida o null si no hay candidatos
+ * @param {Array}  freeList - Particiones libres candidatas
+ * @param {number} reqSize  - Bytes requeridos por el proceso
+ * @returns {Object|null}   La partición elegida o null si no hay candidatos
  */
 function selectPartition(freeList, reqSize) {
-  // Filtrar solo las que tienen espacio suficiente
   const candidates = freeList.filter(p => p.size >= reqSize);
-
   if (candidates.length === 0) return null;
 
   const alg = state.algorithm;
@@ -437,9 +424,8 @@ function selectPartition(freeList, reqSize) {
   if (alg === 'first') {
     /**
      * PRIMER AJUSTE (First Fit):
-     * Elige la PRIMERA partición libre suficientemente grande
-     * recorriendo desde la dirección más baja.
-     * Ventaja: rápido. Desventaja: puede fragmentar el inicio de la RAM.
+     * Primera partición libre suficientemente grande, ordenada por dirección base.
+     * Ventaja: rápido. Desventaja: tiende a fragmentar el inicio de la RAM.
      */
     return candidates.sort((a, b) => a.base - b.base)[0];
   }
@@ -447,10 +433,9 @@ function selectPartition(freeList, reqSize) {
   if (alg === 'best') {
     /**
      * MEJOR AJUSTE (Best Fit):
-     * Elige la partición libre cuyo tamaño es el MÁS CERCANO
-     * (por arriba) al tamaño requerido.
-     * Ventaja: minimiza el desperdicio por partición.
-     * Desventaja: deja muchos fragmentos pequeños inutilizables.
+     * Partición cuyo tamaño sobrante (size − reqSize) es el menor posible.
+     * Ventaja: desperdicia menos por partición.
+     * Desventaja: genera muchos fragmentos pequeños difíciles de reutilizar.
      */
     return candidates.sort((a, b) => (a.size - reqSize) - (b.size - reqSize))[0];
   }
@@ -458,9 +443,9 @@ function selectPartition(freeList, reqSize) {
   if (alg === 'worst') {
     /**
      * PEOR AJUSTE (Worst Fit):
-     * Elige la partición libre MÁS GRANDE disponible.
-     * Ventaja: el sobrante libre es más grande y potencialmente útil.
-     * Desventaja: fragmenta los bloques grandes.
+     * La partición más grande disponible.
+     * Ventaja: el sobrante es grande y útil para procesos futuros.
+     * Desventaja: destruye bloques grandes rápidamente.
      */
     return candidates.sort((a, b) => (b.size - reqSize) - (a.size - reqSize))[0];
   }
@@ -474,18 +459,16 @@ function selectPartition(freeList, reqSize) {
 ═══════════════════════════════════════════════ */
 
 /**
- * Busca un programa en la lista por su ID.
- * @param {string} pid - Identificador del proceso (P1…P8)
+ * Busca un programa en la lista combinada (predefinidos + personalizados).
+ * @param {string} pid
  * @returns {Object|undefined}
  */
 function findProgram(pid) {
-  return PROGRAMS.find(p => p.id === pid);
+  return [...PROGRAMS, ...state.customPrograms].find(p => p.id === pid);
 }
 
 /**
- * Intenta cargar un proceso en RAM según el método activo.
- * Aplica el algoritmo de asignación correspondiente.
- *
+ * Carga un proceso en RAM según el método y algoritmo activos.
  * @param {string} pid - ID del proceso a cargar
  * @returns {boolean} true si la carga fue exitosa
  */
@@ -493,28 +476,21 @@ function allocateProcess(pid) {
   const prog = findProgram(pid);
   if (!prog) return false;
 
-  // Verificar que el proceso no esté ya en memoria
-  const already = state.partitions.find(p => p.pid === pid);
-  if (already) {
+  if (state.partitions.find(p => p.pid === pid)) {
     addLog(`${pid} (${prog.name}) ya está en memoria.`, 'warn');
     return false;
   }
 
   const m = state.method;
 
-  /* ── Modo: Estáticas Fijas ── */
+  /* ── Estáticas Fijas ── */
   if (m === 'fixed') {
-    // En fijo no se usa algoritmo; se busca la primera libre que quepa
     const freeList = state.partitions.filter(p => p.type === 'free');
-
     if (freeList.length === 0) {
-      addLog(`No hay particiones libres para ${pid} (${prog.name}).`, 'err');
+      addLog(`Sin particiones libres para ${pid}.`, 'err');
       return false;
     }
-
-    // La partición fija debe ser ≥ tamaño del proceso
     const fit = freeList.sort((a, b) => a.base - b.base).find(p => p.size >= prog.memSize);
-
     if (!fit) {
       addLog(
         `${pid} (${formatBytes(prog.memSize)}) no cabe en ninguna partición ` +
@@ -522,282 +498,421 @@ function allocateProcess(pid) {
       );
       return false;
     }
-
-    // Asignar la partición al proceso
     fit.type      = 'process';
     fit.pid       = pid;
     fit.allocSize = prog.memSize;
-
-    const intFrag = fit.size - prog.memSize;
     addLog(
       `[FIJO] ${pid} (${prog.name}) → @${hex(fit.base)} | ` +
-      `frag. interna: ${formatBytes(intFrag)}`, 'ok'
+      `frag. interna: ${formatBytes(fit.size - prog.memSize)}`, 'ok'
     );
     return true;
   }
 
-  /* ── Modo: Estáticas Variables ── */
+  /* ── Estáticas Variables ── */
   if (m === 'variable') {
-    const freeList = state.partitions.filter(p => p.type === 'free');
-    const chosen   = selectPartition(freeList, prog.memSize);
-
+    const chosen = selectPartition(state.partitions.filter(p => p.type === 'free'), prog.memSize);
     if (!chosen) {
-      addLog(
-        `[VAR] Sin partición disponible para ${pid} (${formatBytes(prog.memSize)}) ` +
-        `con algoritmo "${algName()}".`, 'err'
-      );
+      addLog(`[VAR] Sin partición para ${pid} (${formatBytes(prog.memSize)}) con "${algName()}".`, 'err');
       return false;
     }
-
     chosen.type      = 'process';
     chosen.pid       = pid;
     chosen.allocSize = prog.memSize;
-
-    const intFrag = chosen.size - prog.memSize;
     addLog(
       `[VAR / ${algName()}] ${pid} (${prog.name}) → @${hex(chosen.base)} ` +
-      `(partición: ${formatBytes(chosen.size)}) | frag. interna: ${formatBytes(intFrag)}`, 'ok'
+      `(partición: ${formatBytes(chosen.size)}) | frag. interna: ${formatBytes(chosen.size - prog.memSize)}`, 'ok'
     );
     return true;
   }
 
-  /* ── Modo: Dinámicas (sin o con compactación) ── */
-  if (m === 'dynamic' || m === 'dynamic_compact') {
-    const freeList = state.partitions.filter(p => p.type === 'free');
-    const chosen   = selectPartition(freeList, prog.memSize);
-
-    if (!chosen) {
-      addLog(
-        `[DIN] Sin bloque contiguo para ${pid} (${formatBytes(prog.memSize)}). ` +
-        `Prueba compactar memoria.`, 'err'
-      );
-      return false;
-    }
-
-    const origBase = chosen.base;
-    const remaining = chosen.size - prog.memSize;
-
-    // El bloque elegido se convierte exactamente al tamaño del proceso
-    chosen.type      = 'process';
-    chosen.pid       = pid;
-    chosen.size      = prog.memSize;
-    chosen.allocSize = prog.memSize;
-
-    // Si sobra espacio, se inserta un nuevo bloque libre justo después
-    if (remaining > 0) {
-      const newFree = {
-        id:        Date.now() + Math.random(),
-        pid:       null,
-        type:      'free',
-        base:      origBase + prog.memSize,
-        size:      remaining,
-        allocSize: 0,
-      };
-      const idx = state.partitions.indexOf(chosen);
-      state.partitions.splice(idx + 1, 0, newFree);
-    }
-
-    addLog(
-      `[DIN / ${algName()}] ${pid} (${prog.name}) → @${hex(origBase)} | ` +
-      `tamaño exacto ${formatBytes(prog.memSize)}`, 'ok'
-    );
-    return true;
+  /* ── Dinámicas ── */
+  const chosen = selectPartition(state.partitions.filter(p => p.type === 'free'), prog.memSize);
+  if (!chosen) {
+    addLog(`[DIN] Sin bloque contiguo para ${pid} (${formatBytes(prog.memSize)}). Intenta compactar.`, 'err');
+    return false;
   }
 
-  return false;
+  const origBase  = chosen.base;
+  const remaining = chosen.size - prog.memSize;
+
+  chosen.type      = 'process';
+  chosen.pid       = pid;
+  chosen.size      = prog.memSize;
+  chosen.allocSize = prog.memSize;
+
+  // Si sobra espacio, insertar un nuevo bloque libre inmediatamente después
+  if (remaining > 0) {
+    const idx = state.partitions.indexOf(chosen);
+    state.partitions.splice(idx + 1, 0, {
+      id: Date.now() + Math.random(),
+      pid: null, type: 'free',
+      base: origBase + prog.memSize,
+      size: remaining, allocSize: 0,
+    });
+  }
+
+  addLog(
+    `[DIN / ${algName()}] ${pid} (${prog.name}) → @${hex(origBase)} | ` +
+    `tamaño exacto ${formatBytes(prog.memSize)}`, 'ok'
+  );
+  return true;
 }
 
 /**
- * Libera la partición ocupada por un proceso y la marca como libre.
- * En modo dinámico también fusiona bloques libres adyacentes (coalescing).
- *
- * @param {string} pid - ID del proceso a liberar
- * @returns {boolean} true si la liberación fue exitosa
+ * Libera la partición de un proceso y la devuelve al pool libre.
+ * En dinámicas fusiona bloques libres adyacentes (coalescing).
+ * @param {string} pid
+ * @returns {boolean}
  */
 function deallocateProcess(pid) {
   const part = state.partitions.find(p => p.pid === pid && p.type === 'process');
-
   if (!part) {
     addLog(`${pid} no está cargado en memoria.`, 'warn');
     return false;
   }
 
   const prog = findProgram(pid);
-  const m    = state.method;
+  part.type      = 'free';
+  part.pid       = null;
+  part.allocSize = 0;
 
-  if (m === 'fixed' || m === 'variable') {
-    // En estáticas: simplemente marcar la partición como libre
-    // El tamaño de la partición no cambia
-    part.type      = 'free';
-    part.pid       = null;
-    part.allocSize = 0;
-
-    addLog(
-      `${pid} (${prog?.name}) liberado. Partición @${hex(part.base)} marcada libre.`, 'ok'
-    );
+  const m = state.method;
+  if (m === 'dynamic' || m === 'dynamic_compact') {
+    coalesceMemory();
+    addLog(`${pid} (${prog?.name}) liberado. Bloques libres adyacentes fusionados.`, 'ok');
   } else {
-    // En dinámicas: liberar y fusionar bloques adyacentes
-    part.type      = 'free';
-    part.pid       = null;
-    part.allocSize = 0;
-
-    coalesceMemory(); // unir bloques libres contiguos
-
-    addLog(
-      `${pid} (${prog?.name}) liberado. Bloques libres adyacentes fusionados.`, 'ok'
-    );
+    addLog(`${pid} (${prog?.name}) liberado. Partición @${hex(part.base)} marcada libre.`, 'ok');
   }
 
   return true;
 }
 
 /**
- * FUSIÓN DE BLOQUES LIBRES (Coalescing).
- * Recorre la lista de particiones ordenada por dirección base
- * y une bloques libres contiguos en uno solo.
- * Esto reduce la fragmentación externa en particiones dinámicas.
+ * Fusión de bloques libres contiguos (Coalescing).
+ * Une bloques libres vecinos en uno solo para reducir la fragmentación externa.
  */
 function coalesceMemory() {
-  // Ordenar particiones por dirección de inicio
   state.partitions.sort((a, b) => a.base - b.base);
-
   let changed = true;
   while (changed) {
     changed = false;
     for (let i = 0; i < state.partitions.length - 1; i++) {
       const a = state.partitions[i];
       const b = state.partitions[i + 1];
-
-      // Si dos bloques consecutivos están libres → fusionarlos
       if (a.type === 'free' && b.type === 'free') {
-        a.size += b.size;          // el bloque A absorbe al B
-        state.partitions.splice(i + 1, 1); // eliminar bloque B
+        a.size += b.size;
+        state.partitions.splice(i + 1, 1);
         changed = true;
-        break; // reiniciar el recorrido después de una fusión
+        break;
       }
     }
   }
 }
 
 /**
- * COMPACTACIÓN DE MEMORIA.
- * Solo disponible en modo dinámico con compactación.
- * Mueve todos los procesos hacia el inicio de RAM (después del SO),
- * consolidando todo el espacio libre en un único bloque al final.
- *
- * Efecto: elimina la fragmentación externa por completo.
- * Costo real (simulado): relocalización de todos los procesos activos.
+ * Compactación de memoria (solo en modo dinámico con compactación).
+ * Mueve todos los procesos al inicio de RAM (tras el SO) y consolida
+ * todo el espacio libre en un único bloque al final.
  */
 function doCompact() {
   if (state.method !== 'dynamic_compact') return;
-
-  // Ordenar particiones por dirección base
   state.partitions.sort((a, b) => a.base - b.base);
 
-  // Calcular total de espacio libre antes de compactar
   const freeTotal = state.partitions
     .filter(p => p.type === 'free')
-    .reduce((sum, p) => sum + p.size, 0);
+    .reduce((s, p) => s + p.size, 0);
 
-  // Obtener el bloque del SO y los procesos activos
   const soPart = state.partitions.find(p => p.type === 'so');
   const procs  = state.partitions.filter(p => p.type === 'process');
 
-  // Rearmar la lista: SO primero, luego todos los procesos compactados
-  let writePtr = SO_SIZE; // escribir desde el fin del SO
+  let writePtr = SO_SIZE;
   const newParts = [soPart];
 
   for (const pr of procs) {
-    pr.base = writePtr; // reubicar el proceso
+    pr.base = writePtr;
     writePtr += pr.size;
     newParts.push(pr);
   }
 
-  // Agregar el único bloque libre al final (si existe)
   if (freeTotal > 0) {
     newParts.push({
-      id:        Date.now(),
-      pid:       null,
-      type:      'free',
-      base:      writePtr,
-      size:      freeTotal,
-      allocSize: 0,
+      id: Date.now(), pid: null, type: 'free',
+      base: writePtr, size: freeTotal, allocSize: 0,
     });
   }
 
   state.partitions = newParts;
-  addLog(
-    `[COMPACTACIÓN] Procesos reubicados. Bloque libre contiguo resultante: ${formatBytes(freeTotal)}`,
-    'info'
-  );
+  addLog(`[COMPACTACIÓN] Procesos reubicados. Bloque libre: ${formatBytes(freeTotal)}`, 'info');
   render();
 }
 
 
 /* ═══════════════════════════════════════════════
-   SECCIÓN 9: ACCIONES DE LA INTERFAZ DE USUARIO
+   SECCIÓN 9: PROCESOS PERSONALIZADOS
+
+   El usuario puede definir procesos con sus propios
+   segmentos (.text, .data, .bss).
+   Los segmentos HEADER (767B), .heap (128KiB) y
+   .stack (64KiB) son iguales para todos los procesos,
+   exactamente como en el ejercicio de clase.
+
+   Flujo:
+     1. El usuario rellena el formulario y presiona "Crear Proceso".
+     2. validateCustomForm() comprueba los valores.
+     3. createCustomProcess() construye el objeto y lo agrega a
+        state.customPrograms.
+     4. El proceso aparece en la lista del panel izquierdo con un
+        borde ámbar y badge "CUSTOM".
+     5. Se carga y descarga de forma manual, igual que los predefinidos.
+     6. removeCustomProcess() lo elimina si no está en RAM.
+
+   Nota: Los procesos personalizados NO entran en la simulación
+   automática T1–T6. Esa secuencia reproduce el ejercicio Excel
+   exacto y mezclar procesos externos alteraría su propósito.
 ═══════════════════════════════════════════════ */
 
 /**
- * Carga en RAM el proceso actualmente seleccionado en la lista.
+ * Actualiza la vista previa del tamaño en RAM mientras el usuario
+ * escribe en los campos del formulario.
+ * Calcula: HEADER + code + data + bss + HEAP + STACK
+ * y marca el campo en rojo si supera la RAM disponible libre.
  */
+function updateSizePreview() {
+  const code = parseInt(document.getElementById('cCode').value) || 0;
+  const data = parseInt(document.getElementById('cData').value) || 0;
+  const bss  = parseInt(document.getElementById('cBss').value)  || 0;
+
+  const total = HEADER_SIZE + code + data + bss + HEAP_SIZE + STACK_SIZE;
+
+  const preview    = document.getElementById('sizePreview');
+  const previewVal = document.getElementById('previewVal');
+
+  if (code + data + bss === 0) {
+    previewVal.textContent = '—';
+    preview.classList.remove('oversize');
+    return;
+  }
+
+  previewVal.textContent = formatBytes(total);
+
+  // Advertir si supera la RAM total (excluyendo el SO)
+  preview.classList.toggle('oversize', total > RAM - SO_SIZE);
+}
+
+/**
+ * Valida los campos del formulario antes de crear el proceso.
+ * Muestra un mensaje de error descriptivo si algo falla.
+ * @returns {boolean} true si el formulario es válido
+ */
+function validateCustomForm() {
+  const errorDiv = document.getElementById('formError');
+  const name  = document.getElementById('cName').value.trim();
+  const code  = parseInt(document.getElementById('cCode').value) || 0;
+  const data  = parseInt(document.getElementById('cData').value) || 0;
+  const bss   = parseInt(document.getElementById('cBss').value)  || 0;
+
+  const hide = () => { errorDiv.style.display = 'none'; };
+  const show = (msg) => {
+    errorDiv.textContent   = msg;
+    errorDiv.style.display = 'block';
+  };
+
+  // El nombre es obligatorio
+  if (!name) {
+    show('El nombre del proceso es obligatorio.');
+    return false;
+  }
+
+  // El segmento .text debe tener al menos 1 byte
+  if (code <= 0) {
+    show('El segmento .text (código) debe ser mayor a 0.');
+    return false;
+  }
+
+  // Los segmentos no pueden ser negativos
+  if (data < 0 || bss < 0) {
+    show('.data y .bss no pueden ser negativos.');
+    return false;
+  }
+
+  // Calcular tamaño total del proceso
+  const total = HEADER_SIZE + code + data + bss + HEAP_SIZE + STACK_SIZE;
+
+  // Debe caber en la RAM (descontando el espacio del SO)
+  if (total > RAM - SO_SIZE) {
+    show(`El proceso (${formatBytes(total)}) supera la RAM disponible (${formatBytes(RAM - SO_SIZE)}).`);
+    return false;
+  }
+
+  // Verificar que no exista ya un proceso personalizado con el mismo nombre
+  const duplicate = state.customPrograms.find(
+    p => p.name.toLowerCase() === name.toLowerCase()
+  );
+  if (duplicate) {
+    show(`Ya existe un proceso personalizado con el nombre "${name}".`);
+    return false;
+  }
+
+  hide();
+  return true;
+}
+
+/**
+ * Crea un nuevo proceso personalizado a partir del formulario
+ * y lo agrega a state.customPrograms.
+ * El proceso queda disponible para carga manual inmediata.
+ */
+function createCustomProcess() {
+  if (!validateCustomForm()) return;
+
+  const name = document.getElementById('cName').value.trim();
+  const code = parseInt(document.getElementById('cCode').value) || 0;
+  const data = parseInt(document.getElementById('cData').value) || 0;
+  const bss  = parseInt(document.getElementById('cBss').value)  || 0;
+
+  // Calcular el tamaño total del proceso en RAM
+  const memSize = HEADER_SIZE + code + data + bss + HEAP_SIZE + STACK_SIZE;
+
+  // Generar ID único: C1, C2, C3…
+  state.customCounter++;
+  const id = `C${state.customCounter}`;
+
+  // Asignar color de la paleta rotatoria
+  const color = CUSTOM_COLORS[state.customColorIdx % CUSTOM_COLORS.length];
+  state.customColorIdx++;
+
+  // Registrar el color en el mapa global de colores
+  PROC_COLORS[id] = color;
+
+  // Construir el objeto del proceso con la misma estructura que PROGRAMS
+  const customProc = {
+    id,
+    name,
+    diskSize:   memSize, // en la simulación el disco = RAM (simplificación)
+    code,
+    dataInit:   data,
+    dataBss:    bss,
+    memInitial: code + data + bss + HEADER_SIZE,
+    memSize,
+    segments: {
+      header: HEADER_SIZE,
+      code,
+      data,
+      bss,
+      heap:  HEAP_SIZE,
+      stack: STACK_SIZE,
+    },
+    custom: true, // marca para distinguirlo en la UI
+  };
+
+  state.customPrograms.push(customProc);
+
+  addLog(
+    `[CUSTOM] ${id} "${name}" creado. ` +
+    `Tamaño en RAM: ${formatBytes(memSize)} ` +
+    `.text:${formatBytes(code)} .data:${formatBytes(data)} .bss:${formatBytes(bss)}`,
+    'info'
+  );
+
+  clearCustomForm();
+  render();
+}
+
+/**
+ * Elimina un proceso personalizado de state.customPrograms.
+ * Si el proceso está cargado en RAM, lo descarga primero.
+ * @param {string} pid - ID del proceso personalizado (C1, C2…)
+ */
+function removeCustomProcess(pid) {
+  // Descargar de RAM si está cargado
+  const inMem = state.partitions.some(p => p.pid === pid && p.type === 'process');
+  if (inMem) deallocateProcess(pid);
+
+  // Eliminar de la lista de procesos personalizados
+  const idx = state.customPrograms.findIndex(p => p.id === pid);
+  if (idx !== -1) {
+    const name = state.customPrograms[idx].name;
+    state.customPrograms.splice(idx, 1);
+    delete PROC_COLORS[pid];
+    addLog(`[CUSTOM] Proceso ${pid} "${name}" eliminado.`, 'warn');
+  }
+
+  // Si el proceso eliminado era el seleccionado, limpiar la selección
+  if (state.selectedProg === pid) state.selectedProg = null;
+
+  render();
+}
+
+/**
+ * Limpia todos los campos del formulario de proceso personalizado
+ * y oculta cualquier mensaje de error visible.
+ */
+function clearCustomForm() {
+  document.getElementById('cName').value = '';
+  document.getElementById('cCode').value = '';
+  document.getElementById('cData').value = '';
+  document.getElementById('cBss').value  = '';
+  document.getElementById('previewVal').textContent = '—';
+  document.getElementById('sizePreview').classList.remove('oversize');
+  document.getElementById('formError').style.display = 'none';
+}
+
+
+/* ═══════════════════════════════════════════════
+   SECCIÓN 10: ACCIONES DE LA INTERFAZ DE USUARIO
+═══════════════════════════════════════════════ */
+
+/** Carga en RAM el proceso seleccionado en la lista. */
 function loadSelectedProcess() {
   if (!state.selectedProg) {
     addLog('Selecciona un programa de la lista antes de cargarlo.', 'warn');
     return;
   }
-  // Leer el algoritmo actual del selector antes de asignar
   state.algorithm = document.getElementById('algorithmSelect').value;
-
-  if (allocateProcess(state.selectedProg)) {
-    render();
-  }
+  if (allocateProcess(state.selectedProg)) render();
 }
 
-/**
- * Libera de RAM el proceso actualmente seleccionado en la lista.
- */
+/** Libera de RAM el proceso seleccionado. */
 function unloadSelectedProcess() {
   if (!state.selectedProg) {
     addLog('Selecciona un proceso para terminarlo.', 'warn');
     return;
   }
-  if (deallocateProcess(state.selectedProg)) {
-    render();
-  }
+  if (deallocateProcess(state.selectedProg)) render();
 }
 
 /**
- * Ejecuta la simulación automática paso a paso (T1 → T6).
- * En cada llamada avanza un instante de tiempo:
- *   1. Libera los procesos que ya no deben estar en RAM.
- *   2. Carga los procesos que deben estar en RAM en este instante.
- * Al llegar a T6, el siguiente llamado reinicia desde T1.
+ * Simulación automática paso a paso (T1 → T6).
+ * - Descarga los procesos que no pertenecen al instante actual.
+ * - Carga los procesos que deben estar en RAM en este instante.
+ * - Los procesos personalizados en RAM NO son afectados por este avance.
  */
 function runAutoSimulation() {
   state.algorithm = document.getElementById('algorithmSelect').value;
-  const tl   = SIM_TIMELINE[state.method];
+  const tl = SIM_TIMELINE[state.method];
   if (!tl) return;
 
   const step   = state.simStep % tl.length;
-  const wanted = tl[step]; // procesos deseados en este instante
+  const wanted = tl[step];
 
-  // Descargar procesos que ya no pertenecen a este instante
+  // Descargar procesos predefinidos que ya no pertenecen a este instante
+  // (los personalizados nunca se tocan aquí)
   const loaded = state.partitions
     .filter(p => p.type === 'process')
-    .map(p => p.pid);
+    .map(p => p.pid)
+    .filter(pid => !pid.startsWith('C')); // ignorar personalizados
 
   for (const pid of loaded) {
     if (!wanted.includes(pid)) deallocateProcess(pid);
   }
 
-  // Cargar los procesos que faltan en este instante
+  // Cargar los procesos predefinidos de este instante
   for (const pid of wanted) {
     const alreadyIn = state.partitions.some(p => p.pid === pid && p.type === 'process');
     if (!alreadyIn) allocateProcess(pid);
   }
 
-  addLog(`━━ T${step + 1} completado | En RAM: [${wanted.join(', ')}] ━━`, 'info');
+  addLog(`━━ T${step + 1} | En RAM: [${wanted.join(', ')}] ━━`, 'info');
   state.simStep++;
 
   if (state.simStep >= tl.length) {
@@ -810,15 +925,10 @@ function runAutoSimulation() {
 
 
 /* ═══════════════════════════════════════════════
-   SECCIÓN 10: RENDERIZADO DE LA INTERFAZ
-   Funciones que actualizan el DOM para reflejar
-   el estado actual de la simulación.
+   SECCIÓN 11: RENDERIZADO DE LA INTERFAZ
 ═══════════════════════════════════════════════ */
 
-/**
- * Renderiza todos los componentes de la UI.
- * Se llama después de cualquier cambio de estado.
- */
+/** Renderiza todos los componentes de la UI. */
 function render() {
   renderMemoryMap();
   renderPartitionTable();
@@ -830,61 +940,91 @@ function render() {
 }
 
 /**
- * Renderiza la lista de programas disponibles en el panel izquierdo.
- * Muestra el nombre, tamaño, barra de segmentos y estado (RAM/DISCO).
+ * Renderiza la lista de programas en el panel izquierdo.
+ * Muestra primero los predefinidos (del Excel) y luego los personalizados,
+ * con un separador visual entre ambos grupos.
  */
 function renderProgramsList() {
   const container = document.getElementById('programsList');
   container.innerHTML = '';
 
+  // ── Grupo 1: Programas predefinidos del ejercicio ──
   for (const prog of PROGRAMS) {
-    // Verificar si el programa está actualmente cargado en RAM
-    const inMem   = state.partitions.some(p => p.pid === prog.id && p.type === 'process');
-    const selected = state.selectedProg === prog.id;
-
-    const div = document.createElement('div');
-    div.className =
-      'prog-item' +
-      (selected ? ' selected'  : '') +
-      (inMem    ? ' in-memory' : '');
-
-    // Al hacer clic, seleccionar el programa y actualizar detalles
-    div.onclick = () => {
-      state.selectedProg = prog.id;
-      renderProgramsList();
-      renderProcessDetail();
-    };
-
-    // Calcular porcentajes de cada segmento para la barra visual
-    const segs  = prog.segments;
-    const total = segs.header + segs.code + segs.data + segs.bss + segs.heap + segs.stack;
-    const pcts  = {
-      header: (segs.header / total) * 100,
-      code:   (segs.code   / total) * 100,
-      data:   (segs.data   / total) * 100,
-      bss:    (segs.bss    / total) * 100,
-      heap:   (segs.heap   / total) * 100,
-      stack:  (segs.stack  / total) * 100,
-    };
-
-    div.innerHTML = `
-      <div class="prog-name">${prog.id}: ${prog.name}</div>
-      <div class="prog-size">${formatKiB(prog.memSize)} KiB en RAM</div>
-      <div class="seg-bar">
-        <div class="seg-part" style="flex:${pcts.header}; background:#555"       title="HEADER"></div>
-        <div class="seg-part" style="flex:${pcts.code};   background:#6c3fc8"    title=".text"></div>
-        <div class="seg-part" style="flex:${pcts.data};   background:#2060c8"    title=".data"></div>
-        <div class="seg-part" style="flex:${pcts.bss};    background:#207060"    title=".bss"></div>
-        <div class="seg-part" style="flex:${pcts.heap};   background:#c86030"    title=".heap"></div>
-        <div class="seg-part" style="flex:${pcts.stack};  background:#806020"    title=".stack"></div>
-      </div>
-      <span class="prog-badge ${inMem ? 'badge-mem' : 'badge-disk'}">
-        ${inMem ? 'EN RAM' : 'EN DISCO'}
-      </span>
-    `;
-
-    container.appendChild(div);
+    container.appendChild(buildProgCard(prog));
   }
+
+  // ── Separador y grupo 2: Programas personalizados ──
+  if (state.customPrograms.length > 0) {
+    const sep = document.createElement('div');
+    sep.className = 'prog-group-label';
+    sep.textContent = 'Personalizados';
+    container.appendChild(sep);
+
+    for (const prog of state.customPrograms) {
+      container.appendChild(buildProgCard(prog));
+    }
+  }
+}
+
+/**
+ * Construye la tarjeta DOM de un programa para la lista del panel izquierdo.
+ * @param {Object} prog - Objeto de programa (predefinido o personalizado)
+ * @returns {HTMLElement}
+ */
+function buildProgCard(prog) {
+  const inMem    = state.partitions.some(p => p.pid === prog.id && p.type === 'process');
+  const selected = state.selectedProg === prog.id;
+
+  const div = document.createElement('div');
+  div.className =
+    'prog-item' +
+    (prog.custom ? ' custom-prog' : '') +
+    (selected    ? ' selected'    : '') +
+    (inMem       ? ' in-memory'   : '');
+
+  div.onclick = () => {
+    state.selectedProg = prog.id;
+    renderProgramsList();
+    renderProcessDetail();
+  };
+
+  // Barra proporcional de segmentos
+  const segs  = prog.segments;
+  const total = segs.header + segs.code + segs.data + segs.bss + segs.heap + segs.stack;
+
+  div.innerHTML = `
+    <div class="prog-name">${prog.id}: ${prog.name}</div>
+    <div class="prog-size">${formatKiB(prog.memSize)} KiB en RAM</div>
+    <div class="seg-bar">
+      <div class="seg-part" style="flex:${segs.header/total*100}; background:#555"    title="HEADER"></div>
+      <div class="seg-part" style="flex:${segs.code/total*100};   background:#6c3fc8" title=".text"></div>
+      <div class="seg-part" style="flex:${segs.data/total*100};   background:#2060c8" title=".data"></div>
+      <div class="seg-part" style="flex:${segs.bss/total*100};    background:#207060" title=".bss"></div>
+      <div class="seg-part" style="flex:${segs.heap/total*100};   background:#c86030" title=".heap"></div>
+      <div class="seg-part" style="flex:${segs.stack/total*100};  background:#806020" title=".stack"></div>
+    </div>
+    <span class="prog-badge ${inMem ? 'badge-mem' : prog.custom ? 'badge-custom' : 'badge-disk'}">
+      ${inMem ? 'EN RAM' : prog.custom ? 'CUSTOM' : 'EN DISCO'}
+    </span>
+  `;
+
+  // Botón de eliminar: solo para procesos personalizados no cargados en RAM
+  if (prog.custom) {
+    const btnRemove = document.createElement('button');
+    btnRemove.className = 'btn-remove-custom';
+    btnRemove.textContent = '×';
+    btnRemove.title = inMem
+      ? 'Termina el proceso primero para poder eliminarlo'
+      : `Eliminar ${prog.id}`;
+    btnRemove.disabled = inMem;
+    btnRemove.onclick = (e) => {
+      e.stopPropagation(); // no activar la selección del proceso
+      removeCustomProcess(prog.id);
+    };
+    div.appendChild(btnRemove);
+  }
+
+  return div;
 }
 
 /**
@@ -902,22 +1042,22 @@ function renderProcessDetail() {
   const prog = findProgram(state.selectedProg);
   if (!prog) return;
 
-  // Buscar la partición donde está cargado (si aplica)
   const part = state.partitions.find(p => p.pid === prog.id && p.type === 'process');
   const segs = prog.segments;
+  const color = PROC_COLORS[prog.id] || '#aaa';
 
   detail.innerHTML = `
     <div class="info-box">
-      <div><span class="label">ID: </span>
-        <span class="value" style="color:${PROC_COLORS[prog.id] || '#aaa'}">${prog.id} — ${prog.name}</span>
+      <div>
+        <span class="label">ID: </span>
+        <span class="value" style="color:${color}">${prog.id} — ${prog.name}</span>
+        ${prog.custom ? '<span style="font-size:9px;color:var(--custom);margin-left:6px;">CUSTOM</span>' : ''}
       </div>
       <div><span class="label">En disco: </span>${formatBytes(prog.diskSize)}</div>
       <div><span class="label">En RAM: </span>${formatBytes(prog.memSize)} (${formatKiB(prog.memSize)} KiB)</div>
       ${part
-        ? `<div><span class="label">Base: </span>
-             <span class="value">${hex(part.base)}</span></div>
-           <div><span class="label">Límite: </span>
-             <span class="value">${hex(part.base + part.size - 1)}</span></div>`
+        ? `<div><span class="label">Base: </span><span class="value">${hex(part.base)}</span></div>
+           <div><span class="label">Límite: </span><span class="value">${hex(part.base + part.size - 1)}</span></div>`
         : '<div style="color:var(--amber);font-size:11px;margin-top:4px;">No cargado en RAM</div>'
       }
     </div>
@@ -925,90 +1065,77 @@ function renderProcessDetail() {
     <table style="margin-top:6px">
       <thead><tr><th>Segmento</th><th>Bytes</th><th>%</th></tr></thead>
       <tbody>
-        ${segRow('HEADER (EXE)',    segs.header, prog.memSize, '#555')}
-        ${segRow('.text (código)',  segs.code,   prog.memSize, '#6c3fc8')}
-        ${segRow('.data (init.)',   segs.data,   prog.memSize, '#2060c8')}
-        ${segRow('.bss (uninit.)',  segs.bss,    prog.memSize, '#207060')}
-        ${segRow('.heap (mont.)',   segs.heap,   prog.memSize, '#c86030')}
-        ${segRow('.stack (pila)',   segs.stack,  prog.memSize, '#806020')}
+        ${segRow('HEADER',         segs.header, prog.memSize, '#555')}
+        ${segRow('.text (código)', segs.code,   prog.memSize, '#6c3fc8')}
+        ${segRow('.data (init.)',  segs.data,   prog.memSize, '#2060c8')}
+        ${segRow('.bss (uninit.)', segs.bss,    prog.memSize, '#207060')}
+        ${segRow('.heap (mont.)',  segs.heap,   prog.memSize, '#c86030')}
+        ${segRow('.stack (pila)',  segs.stack,  prog.memSize, '#806020')}
       </tbody>
     </table>
   `;
 }
 
 /**
- * Genera una fila HTML para la tabla de segmentos del proceso.
- * @param {string} name   - Nombre del segmento
- * @param {number} size   - Tamaño en bytes
- * @param {number} total  - Tamaño total del proceso en bytes
- * @param {string} color  - Color hexadecimal del segmento
- * @returns {string} HTML de la fila <tr>
+ * Genera una fila HTML para la tabla de segmentos.
+ * @param {string} name  - Nombre del segmento
+ * @param {number} size  - Bytes del segmento
+ * @param {number} total - Bytes totales del proceso
+ * @param {string} color - Color del segmento
  */
 function segRow(name, size, total, color) {
   const pct = ((size / total) * 100).toFixed(1);
   return `<tr>
     <td>
       <span style="display:inline-block;width:8px;height:8px;border-radius:2px;
-                   background:${color};margin-right:5px;"></span>
-      ${name}
+                   background:${color};margin-right:5px;"></span>${name}
     </td>
     <td>${formatBytes(size)}</td>
     <td>${pct}%</td>
   </tr>`;
 }
 
-/**
- * Renderiza el mapa visual de memoria (columna central).
- * Construye la representación proporcional de las 16 MiB de RAM.
- */
+/** Renderiza el mapa visual de memoria (columna de bloques proporcionales). */
 function renderMemoryMap() {
   const container = document.getElementById('memMapContainer');
   container.innerHTML = '';
 
-  const mapHeight = 520; // altura total del mapa en px
+  const mapHeight = 520;
 
-  /* ── Columna de etiquetas de dirección (izquierda) ── */
+  // Etiquetas de dirección hex (izquierda del mapa)
   const addrLabels = document.createElement('div');
   addrLabels.className = 'addr-labels';
   addrLabels.style.cssText = `height:${mapHeight}px; position:relative;`;
 
-  // Direcciones clave que se muestran como referencia
   const keyAddrs = [0, SO_SIZE, RAM / 4, RAM / 2, (3 * RAM) / 4, RAM - 1];
   for (const addr of keyAddrs.sort((a, b) => a - b)) {
-    const ratio = addr / RAM;
     const label = document.createElement('div');
     label.className = 'addr-label';
-    label.style.cssText = `position:absolute; bottom:${ratio * mapHeight}px; left:0;`;
+    label.style.cssText = `position:absolute; bottom:${(addr / RAM) * mapHeight}px; left:0;`;
     label.textContent = hex(addr);
     addrLabels.appendChild(label);
   }
 
-  /* ── Columna del mapa visual (centro) ── */
+  // Mapa visual (bloques proporcionales, de mayor a menor dirección = top a bottom)
   const map = document.createElement('div');
-  map.className = 'mem-map';
+  map.className  = 'mem-map';
   map.style.height = mapHeight + 'px';
 
-  // Ordenar particiones de mayor a menor dirección (el mapa crece de abajo hacia arriba)
   const sortedDesc = [...state.partitions].sort((a, b) => b.base - a.base);
-
   for (const part of sortedDesc) {
-    const ratio   = part.size / RAM;
-    const h       = Math.max(ratio * mapHeight, 8); // mínimo 8px para visibilidad
-
+    const h = Math.max((part.size / RAM) * mapHeight, 8);
     const block = document.createElement('div');
     block.className  = 'mem-block';
     block.style.height     = h + 'px';
     block.style.background = blockColor(part);
     block.style.color      = blockTextColor(part);
-
     const label = document.createElement('div');
-    label.className = 'mem-block-text';
+    label.className   = 'mem-block-text';
     label.textContent = blockLabel(part, h);
     block.appendChild(label);
     map.appendChild(block);
   }
 
-  /* ── Tabla de particiones (derecha) ── */
   const tableWrapper = document.createElement('div');
   tableWrapper.className = 'ptable';
 
@@ -1017,47 +1144,38 @@ function renderMemoryMap() {
   container.appendChild(tableWrapper);
 }
 
-/** Devuelve el color de fondo para un bloque del mapa de memoria. */
+/** Color de fondo de un bloque en el mapa de memoria. */
 function blockColor(part) {
-  if (part.type === 'so')    return '#2a2a42'; // SO — azul oscuro
-  if (part.type === 'free')  return '#1a2a1a'; // libre — verde muy oscuro
-  return PROC_COLORS[part.pid] || '#404040';   // proceso — color asignado
+  if (part.type === 'so')   return '#2a2a42';
+  if (part.type === 'free') return '#1a2a1a';
+  return PROC_COLORS[part.pid] || '#404040';
 }
 
-/** Devuelve el color del texto dentro del bloque de memoria. */
+/** Color del texto dentro de un bloque del mapa. */
 function blockTextColor(part) {
   if (part.type === 'free') return '#3a6a3a';
   if (part.type === 'so')   return '#6060a0';
   return '#e0e0ff';
 }
 
-/**
- * Devuelve la etiqueta de texto para un bloque del mapa.
- * Solo muestra texto si el bloque es suficientemente alto.
- */
-function blockLabel(part, height) {
-  if (height < 12) return '';
-  if (part.type === 'free') return height > 18 ? 'FREE' : '';
+/** Etiqueta de texto de un bloque (solo si es suficientemente alto). */
+function blockLabel(part, h) {
+  if (h < 12)              return '';
+  if (part.type === 'free') return h > 18 ? 'FREE' : '';
   if (part.type === 'so')   return 'S.O.';
   return part.pid;
 }
 
-/**
- * Renderiza la tabla detallada de todas las particiones.
- * Muestra base, límite, tamaño y fragmentación interna.
- */
+/** Renderiza la tabla detallada de todas las particiones. */
 function renderPartitionTable() {
-  const tbody  = document.getElementById('partTableBody');
+  const tbody = document.getElementById('partTableBody');
   tbody.innerHTML = '';
 
-  const sorted = [...state.partitions].sort((a, b) => a.base - b.base);
-
-  sorted.forEach((part, i) => {
-    // Fragmentación interna = tamaño partición − tamaño real del proceso
+  [...state.partitions].sort((a, b) => a.base - b.base).forEach((part, i) => {
     const intFrag = (part.type === 'process' && part.size > part.allocSize)
-      ? part.size - part.allocSize
-      : 0;
+      ? part.size - part.allocSize : 0;
 
+    const isCustom = part.pid && part.pid.startsWith('C');
     const tr = document.createElement('tr');
     if (part.type === 'process') tr.className = 'highlight-row';
 
@@ -1066,6 +1184,7 @@ function renderPartitionTable() {
       <td class="pid-cell ${part.type === 'so' ? 'pid-SO' : ''}"
           style="color:${part.type === 'process' ? (PROC_COLORS[part.pid] || '#aaa') : 'inherit'}">
         ${part.pid || '—'}
+        ${isCustom ? '<span style="font-size:8px;color:var(--custom);margin-left:3px;">★</span>' : ''}
       </td>
       <td>
         <span class="status-dot ${
@@ -1078,45 +1197,33 @@ function renderPartitionTable() {
       <td>${part.base.toLocaleString()}</td>
       <td>${part.size.toLocaleString()}</td>
       <td>${formatKiB(part.size)}</td>
-      <td>
-        ${intFrag > 0
-          ? `<span style="color:var(--amber)">${formatBytes(intFrag)}</span>`
-          : (part.type === 'process'
-              ? '<span style="color:var(--green)">0</span>'
-              : '—')}
+      <td>${intFrag > 0
+        ? `<span style="color:var(--amber)">${formatBytes(intFrag)}</span>`
+        : (part.type === 'process' ? '<span style="color:var(--green)">0</span>' : '—')}
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-/**
- * Actualiza los chips de estadísticas (bytes usados / bytes libres).
- */
+/** Actualiza los chips de estadísticas (usado / libre). */
 function renderStats() {
-  const usedBytes = state.partitions
+  const used = state.partitions
     .filter(p => p.type === 'process' || p.type === 'so')
     .reduce((s, p) => s + p.size, 0);
-
-  document.getElementById('statUsed').textContent = `Usado: ${formatKiB(usedBytes)} KiB`;
-  document.getElementById('statFree').textContent = `Libre: ${formatKiB(RAM - usedBytes)} KiB`;
+  document.getElementById('statUsed').textContent = `Usado: ${formatKiB(used)} KiB`;
+  document.getElementById('statFree').textContent = `Libre: ${formatKiB(RAM - used)} KiB`;
 }
 
-/**
- * Renderiza el panel de análisis de fragmentación interna y externa.
- */
+/** Renderiza el análisis de fragmentación interna y externa. */
 function renderFragSection() {
   document.getElementById('fragSection').style.display = 'block';
 
-  // Fragmentación interna: suma de (tamaño_partición - tamaño_proceso) por cada proceso cargado
   let intFrag = 0;
   for (const p of state.partitions) {
-    if (p.type === 'process') {
-      intFrag += (p.size - (p.allocSize || p.size));
-    }
+    if (p.type === 'process') intFrag += (p.size - (p.allocSize || p.size));
   }
 
-  // Fragmentación externa: bloques libres dispersos
   const freeBlocks  = state.partitions.filter(p => p.type === 'free');
   const freeTotal   = freeBlocks.reduce((s, p) => s + p.size, 0);
   const largestFree = freeBlocks.reduce((m, p) => Math.max(m, p.size), 0);
@@ -1141,34 +1248,24 @@ function renderFragSection() {
     </div>
     <div class="info-box">
       <div class="label">Procesos en RAM</div>
-      <div class="value">
-        ${state.partitions.filter(p => p.type === 'process').length}
-      </div>
+      <div class="value">${state.partitions.filter(p => p.type === 'process').length}</div>
     </div>
   `;
 }
 
-/**
- * Renderiza la lista de bloques libres en el panel derecho.
- * Muestra dirección de inicio, fin y tamaño de cada fragmento libre.
- */
+/** Renderiza la lista de bloques libres en el panel derecho. */
 function renderFreeFragList() {
-  const div        = document.getElementById('freeFragList');
-  const freeBlocks = state.partitions
-    .filter(p => p.type === 'free')
-    .sort((a, b) => a.base - b.base);
+  const div = document.getElementById('freeFragList');
+  const free = state.partitions.filter(p => p.type === 'free').sort((a, b) => a.base - b.base);
 
-  if (freeBlocks.length === 0) {
+  if (free.length === 0) {
     div.innerHTML = '<span style="color:var(--text3)">Sin bloques libres.</span>';
     return;
   }
 
-  div.innerHTML = freeBlocks.map((b, i) => `
+  div.innerHTML = free.map((b, i) => `
     <div class="info-box" style="margin-bottom:5px;">
-      <div>
-        <span class="label">Bloque ${i + 1}: </span>
-        ${hex(b.base)} – ${hex(b.base + b.size - 1)}
-      </div>
+      <div><span class="label">Bloque ${i + 1}: </span>${hex(b.base)} – ${hex(b.base + b.size - 1)}</div>
       <div style="color:var(--green)">${formatBytes(b.size)} (${formatKiB(b.size)} KiB)</div>
     </div>
   `).join('');
@@ -1176,13 +1273,12 @@ function renderFreeFragList() {
 
 
 /* ═══════════════════════════════════════════════
-   SECCIÓN 11: FUNCIONES AUXILIARES (HELPERS)
+   SECCIÓN 12: FUNCIONES AUXILIARES
 ═══════════════════════════════════════════════ */
 
 /**
- * Convierte un número a representación hexadecimal con prefijo 0x
- * y cero-relleno hasta 6 dígitos (24 bits).
- * @param {number} n - Número entero
+ * Convierte un número a hexadecimal con prefijo 0x y 6 dígitos (24 bits).
+ * @param {number} n
  * @returns {string} Ej: 0x100000
  */
 function hex(n) {
@@ -1190,8 +1286,8 @@ function hex(n) {
 }
 
 /**
- * Formatea bytes a la unidad más legible (B / KiB / MiB).
- * @param {number} b - Cantidad en bytes
+ * Formatea bytes a la unidad más legible.
+ * @param {number} b
  * @returns {string} Ej: "1.50 MiB", "224.5 KiB", "767 B"
  */
 function formatBytes(b) {
@@ -1202,15 +1298,15 @@ function formatBytes(b) {
 
 /**
  * Convierte bytes a KiB con dos decimales.
- * @param {number} b - Cantidad en bytes
- * @returns {string} Ej: "219.38"
+ * @param {number} b
+ * @returns {string}
  */
 function formatKiB(b) {
   return (b / 1_024).toFixed(2);
 }
 
 /**
- * Devuelve el nombre legible del algoritmo de asignación activo.
+ * Nombre legible del algoritmo de asignación activo.
  * @returns {string}
  */
 function algName() {
@@ -1221,55 +1317,45 @@ function algName() {
 }
 
 /**
- * Agrega una entrada al log de eventos (panel derecho).
- * Las entradas más nuevas aparecen arriba.
- *
- * @param {string} msg  - Mensaje a mostrar
- * @param {string} type - Tipo: 'ok' | 'err' | 'warn' | 'info'
+ * Agrega una entrada al log de eventos.
+ * Las entradas más recientes aparecen primero.
+ * @param {string} msg  - Mensaje
+ * @param {string} type - 'ok' | 'err' | 'warn' | 'info'
  */
 function addLog(msg, type) {
   const list = document.getElementById('logList');
   const li   = document.createElement('li');
   li.className = 'log-item';
 
-  // Marca de tiempo actual
-  const t = new Date().toLocaleTimeString('es', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
-
-  // Clase CSS según el tipo de mensaje
-  const cls = type === 'ok'   ? 'log-ok'   :
-              type === 'err'  ? 'log-err'  :
-              type === 'warn' ? 'log-warn' : 'log-info';
+  const t   = new Date().toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const cls = type === 'ok' ? 'log-ok' : type === 'err' ? 'log-err' : type === 'warn' ? 'log-warn' : 'log-info';
 
   li.innerHTML = `<span class="log-time">[${t}]</span><span class="${cls}">${msg}</span>`;
-
-  // Insertar al inicio (los más nuevos primero)
   list.insertBefore(li, list.firstChild);
 
-  // Limitar el log a 60 entradas para evitar acumulación excesiva
-  if (list.children.length > 60) list.removeChild(list.lastChild);
+  // Limitar el log a 80 entradas
+  if (list.children.length > 80) list.removeChild(list.lastChild);
 }
 
 
 /* ═══════════════════════════════════════════════
-   SECCIÓN 12: ATAJOS DE TECLADO
+   SECCIÓN 13: ATAJOS DE TECLADO
 ═══════════════════════════════════════════════ */
-
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.ctrlKey) loadSelectedProcess();  // Ctrl+Enter → cargar
-  if (e.key === 'Delete')             unloadSelectedProcess(); // Delete    → liberar
+  // Ctrl+Enter → cargar proceso seleccionado
+  if (e.key === 'Enter' && e.ctrlKey) loadSelectedProcess();
+  // Delete → liberar proceso seleccionado
+  if (e.key === 'Delete') unloadSelectedProcess();
 });
 
 
 /* ═══════════════════════════════════════════════
-   SECCIÓN 13: ARRANQUE
-   Se ejecuta cuando el DOM está completamente cargado
+   SECCIÓN 14: ARRANQUE
 ═══════════════════════════════════════════════ */
 window.onload = () => {
   init();
   addLog('Sistema iniciado. RAM total: 16 MiB (0x000000 – 0xFFFFFF)', 'info');
-  addLog('S.O. reserva 1 MiB (pila 64K + montículo 128K + EXE header 767B + reserva)', 'info');
-  addLog('Selecciona un método de gestión y un proceso para comenzar.', 'info');
+  addLog('S.O. reserva 1 MiB (pila 64K + montículo 128K + EXE header 767B)', 'info');
+  addLog('Usa el formulario del panel derecho para crear procesos personalizados.', 'info');
   render();
 };
