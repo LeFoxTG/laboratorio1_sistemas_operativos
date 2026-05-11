@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulador — Segmentación y Paginación</title>
+  <link rel="stylesheet" href="simulador_seg_pag.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ENCABEZADO PRINCIPAL
+  ═══════════════════════════════════════════════════════ -->
+  <header>
+    <div class="header-left">
+      <div class="logo">LABORATORIO <span class="logo-accent">4</span></div>
+      <div class="subtitle">Segmentación &amp; Paginación — Sistema Multiprogramado · 16 MiB</div>
+    </div>
+    <div class="header-chips">
+      <span class="chip chip-addr">0x000000 – 0xFFFFFF</span>
+      <span class="chip chip-ram" id="chipRamFree">Libre: 15 MiB</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════
+       LAYOUT: barra lateral izquierda + área principal
+  ═══════════════════════════════════════════════════════ -->
+  <div class="app-layout">
+
+    <!-- ── SIDEBAR: Programas + Controles ── -->
+    <aside class="sidebar">
+
+      <!-- Método de gestión -->
+      <div class="side-section">
+        <div class="side-label">Método de Gestión</div>
+        <div class="seg-tab-row" id="methodTabs">
+          <button class="seg-tab active" data-method="segmentation" onclick="setMethod('segmentation')">Segmentación</button>
+          <button class="seg-tab"        data-method="paging"       onclick="setMethod('paging')">Paginación</button>
+        </div>
+      </div>
+
+      <!-- Algoritmo (solo Segmentación) -->
+      <div class="side-section" id="algSection">
+        <div class="side-label">Algoritmo de Asignación</div>
+        <select id="algorithmSelect" onchange="onAlgorithmChange()">
+          <option value="first">Primer Ajuste (First Fit)</option>
+          <option value="best">Mejor Ajuste (Best Fit)</option>
+          <option value="worst">Peor Ajuste (Worst Fit)</option>
+        </select>
+      </div>
+
+      <!-- Tamaño de página (solo Paginación) -->
+      <div class="side-section" id="pageSizeSection" style="display:none">
+        <div class="side-label">Tamaño de Página</div>
+        <select id="pageSizeSelect" onchange="onPageSizeChange()">
+          <option value="4096">4 KiB</option>
+          <option value="8192">8 KiB</option>
+          <option value="16384">16 KiB</option>
+          <option value="32768">32 KiB</option>
+          <option value="65536">64 KiB</option>
+        </select>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Programas disponibles -->
+      <div class="side-label">Programas Disponibles</div>
+      <div id="programsList"></div>
+
+      <div class="divider"></div>
+
+      <!-- Instancias en ejecución -->
+      <div class="side-label">Instancias en RAM
+        <span class="instance-count" id="instanceCount">0</span>
+      </div>
+      <div id="instancesList"></div>
+
+      <div class="divider"></div>
+
+      <!-- Acciones -->
+      <div class="side-section">
+        <button class="btn btn-primary" onclick="loadSelectedProgram()">▶ Cargar en RAM</button>
+        <button class="btn btn-danger"  onclick="unloadSelectedInstance()" style="margin-top:6px">✕ Terminar Instancia</button>
+        <button class="btn btn-ghost"   onclick="resetMemory()"            style="margin-top:6px">↺ Resetear Memoria</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Nuevo proceso personalizado -->
+      <div class="side-label">Nuevo Proceso <span class="tag-custom">CUSTOM</span></div>
+      <div class="custom-form">
+        <input type="text"   id="cName" placeholder="Nombre"         maxlength="16" oninput="updatePreview()" />
+        <input type="number" id="cCode" placeholder=".text  (bytes)"  min="1"       oninput="updatePreview()" />
+        <input type="number" id="cData" placeholder=".data  (bytes)"  min="0"       oninput="updatePreview()" />
+        <input type="number" id="cBss"  placeholder=".bss   (bytes)"  min="0"       oninput="updatePreview()" />
+        <div class="fixed-chips">
+          <span>HEADER 767B</span><span>HEAP 128K</span><span>STACK 64K</span>
+        </div>
+        <div class="preview-line" id="previewLine">RAM: <strong id="previewVal">—</strong></div>
+        <div class="form-err" id="formErr" style="display:none"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-primary" style="flex:1" onclick="createCustomProgram()">+ Crear</button>
+          <button class="btn btn-ghost"   style="width:36px;padding:0" onclick="clearForm()">✕</button>
+        </div>
+      </div>
+
+    </aside><!-- /sidebar -->
+
+
+    <!-- ── ÁREA PRINCIPAL ── -->
+    <main class="main-area">
+
+      <!-- Fila superior: mapa de memoria + tabla de traducción -->
+      <div class="top-row">
+
+        <!-- Mapa visual de RAM -->
+        <section class="card mem-card">
+          <div class="card-header">
+            <span class="card-title" id="mapTitle">Mapa de Memoria — Segmentación</span>
+            <div class="mem-bars" id="memBars">
+              <div class="bar-used" id="barUsed" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="mem-map-wrap">
+            <!-- Etiquetas hex (izquierda) -->
+            <div class="addr-col" id="addrCol"></div>
+            <!-- Columna visual de bloques -->
+            <div class="mem-col" id="memCol"></div>
+            <!-- Leyenda de instancias (derecha) -->
+            <div class="legend-col" id="legendCol"></div>
+          </div>
+        </section>
+
+        <!-- Tabla de traducción de direcciones -->
+        <section class="card table-card">
+          <div class="card-header">
+            <span class="card-title" id="tableTitle">Tabla de Segmentos</span>
+            <span class="chip chip-sm" id="tableSubtitle">—</span>
+          </div>
+          <div style="overflow:auto;flex:1">
+            <table id="addrTable">
+              <thead id="addrTableHead"></thead>
+              <tbody id="addrTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+      </div><!-- /top-row -->
+
+      <!-- Fila inferior: detalles de instancia + estadísticas + log -->
+      <div class="bottom-row">
+
+        <!-- Detalles de la instancia seleccionada -->
+        <section class="card detail-card">
+          <div class="card-header">
+            <span class="card-title">Detalle de Instancia</span>
+          </div>
+          <div id="instanceDetail">
+            <p class="placeholder-text">Selecciona una instancia para ver sus detalles.</p>
+          </div>
+        </section>
+
+        <!-- Estadísticas de fragmentación -->
+        <section class="card stats-card">
+          <div class="card-header">
+            <span class="card-title">Estadísticas</span>
+          </div>
+          <div id="statsPanel"></div>
+        </section>
+
+        <!-- Log de eventos -->
+        <section class="card log-card">
+          <div class="card-header">
+            <span class="card-title">Log de Eventos</span>
+            <button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="clearLog()">Limpiar</button>
+          </div>
+          <ul class="log-list" id="logList"></ul>
+        </section>
+
+      </div><!-- /bottom-row -->
+
+    </main><!-- /main-area -->
+
+  </div><!-- /app-layout -->
+
+  <script src="simulador_seg_pag.js"></script>
+
+</body>
+</html>
