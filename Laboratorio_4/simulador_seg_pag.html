@@ -7,13 +7,13 @@
   <link rel="stylesheet" href="simulador_seg_pag.css" />
 </head>
 <body>
-
+ 
   <!-- ═══════════════════════════════════════════════════════
        ENCABEZADO PRINCIPAL
   ═══════════════════════════════════════════════════════ -->
   <header>
     <div class="header-left">
-      <div class="logo">LABORATORIO <span class="logo-accent">4</span></div>
+      <div class="logo">MEM-SIM <span class="logo-accent">II</span></div>
       <div class="subtitle">Segmentación &amp; Paginación — Sistema Multiprogramado · 16 MiB</div>
     </div>
     <div class="header-chips">
@@ -21,15 +21,15 @@
       <span class="chip chip-ram" id="chipRamFree">Libre: 15 MiB</span>
     </div>
   </header>
-
+ 
   <!-- ═══════════════════════════════════════════════════════
        LAYOUT: barra lateral izquierda + área principal
   ═══════════════════════════════════════════════════════ -->
   <div class="app-layout">
-
+ 
     <!-- ── SIDEBAR: Programas + Controles ── -->
     <aside class="sidebar">
-
+ 
       <!-- Método de gestión -->
       <div class="side-section">
         <div class="side-label">Método de Gestión</div>
@@ -38,7 +38,7 @@
           <button class="seg-tab"        data-method="paging"       onclick="setMethod('paging')">Paginación</button>
         </div>
       </div>
-
+ 
       <!-- Algoritmo (solo Segmentación) -->
       <div class="side-section" id="algSection">
         <div class="side-label">Algoritmo de Asignación</div>
@@ -48,7 +48,7 @@
           <option value="worst">Peor Ajuste (Worst Fit)</option>
         </select>
       </div>
-
+ 
       <!-- Tamaño de página (solo Paginación) -->
       <div class="side-section" id="pageSizeSection" style="display:none">
         <div class="side-label">Tamaño de Página</div>
@@ -60,32 +60,32 @@
           <option value="65536">64 KiB</option>
         </select>
       </div>
-
+ 
       <div class="divider"></div>
-
+ 
       <!-- Programas disponibles -->
       <div class="side-label">Programas Disponibles</div>
       <div id="programsList"></div>
-
+ 
       <div class="divider"></div>
-
+ 
       <!-- Instancias en ejecución -->
       <div class="side-label">Instancias en RAM
         <span class="instance-count" id="instanceCount">0</span>
       </div>
       <div id="instancesList"></div>
-
+ 
       <div class="divider"></div>
-
+ 
       <!-- Acciones -->
       <div class="side-section">
         <button class="btn btn-primary" onclick="loadSelectedProgram()">▶ Cargar en RAM</button>
         <button class="btn btn-danger"  onclick="unloadSelectedInstance()" style="margin-top:6px">✕ Terminar Instancia</button>
         <button class="btn btn-ghost"   onclick="resetMemory()"            style="margin-top:6px">↺ Resetear Memoria</button>
       </div>
-
+ 
       <div class="divider"></div>
-
+ 
       <!-- Nuevo proceso personalizado -->
       <div class="side-label">Nuevo Proceso <span class="tag-custom">CUSTOM</span></div>
       <div class="custom-form">
@@ -103,16 +103,16 @@
           <button class="btn btn-ghost"   style="width:36px;padding:0" onclick="clearForm()">✕</button>
         </div>
       </div>
-
+ 
     </aside><!-- /sidebar -->
-
-
+ 
+ 
     <!-- ── ÁREA PRINCIPAL ── -->
     <main class="main-area">
-
+ 
       <!-- Fila superior: mapa de memoria + tabla de traducción -->
       <div class="top-row">
-
+ 
         <!-- Mapa visual de RAM -->
         <section class="card mem-card">
           <div class="card-header">
@@ -130,7 +130,7 @@
             <div class="legend-col" id="legendCol"></div>
           </div>
         </section>
-
+ 
         <!-- Tabla de traducción de direcciones -->
         <section class="card table-card">
           <div class="card-header">
@@ -144,12 +144,12 @@
             </table>
           </div>
         </section>
-
+ 
       </div><!-- /top-row -->
-
+ 
       <!-- Fila inferior: detalles de instancia + estadísticas + log -->
       <div class="bottom-row">
-
+ 
         <!-- Detalles de la instancia seleccionada -->
         <section class="card detail-card">
           <div class="card-header">
@@ -159,7 +159,7 @@
             <p class="placeholder-text">Selecciona una instancia para ver sus detalles.</p>
           </div>
         </section>
-
+ 
         <!-- Estadísticas de fragmentación -->
         <section class="card stats-card">
           <div class="card-header">
@@ -167,7 +167,7 @@
           </div>
           <div id="statsPanel"></div>
         </section>
-
+ 
         <!-- Log de eventos -->
         <section class="card log-card">
           <div class="card-header">
@@ -176,14 +176,14 @@
           </div>
           <ul class="log-list" id="logList"></ul>
         </section>
-
+ 
       </div><!-- /bottom-row -->
-
+ 
     </main><!-- /main-area -->
-
+ 
   </div><!-- /app-layout -->
-
+ 
   <script src="simulador_seg_pag.js"></script>
-
+ 
 </body>
 </html>
