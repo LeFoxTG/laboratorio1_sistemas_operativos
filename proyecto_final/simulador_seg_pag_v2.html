@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulador — Segmentación Paginada</title>
+  <link rel="stylesheet" href="simulador_seg_pag_v2.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ENCABEZADO PRINCIPAL
+  ═══════════════════════════════════════════════════════ -->
+  <header>
+    <div class="header-left">
+      <div class="logo">MEM-SIM <span class="logo-accent">III</span></div>
+      <div class="subtitle">Segmentación Paginada — Sistema Multiprogramado · 512 MiB RAM · Espacio lógico 4 GiB (32 bits)</div>
+    </div>
+    <div class="header-chips">
+      <span class="chip chip-addr" id="chipAddrSpace">Lógico: 0x00000000 – 0xFFFFFFFF</span>
+      <span class="chip chip-ram" id="chipRamFree">Libre: 508 MiB</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════
+       LAYOUT: barra lateral izquierda + área principal
+  ═══════════════════════════════════════════════════════ -->
+  <div class="app-layout">
+
+    <!-- ── SIDEBAR: Programas + Controles ── -->
+    <aside class="sidebar">
+
+      <!-- Descripción del modo -->
+      <div class="side-section mode-banner">
+        <div class="mode-title">Segmentación Paginada</div>
+        <div class="mode-desc">
+          Cada proceso tiene una <strong>tabla de segmentos</strong>.
+          Cada segmento tiene su propia <strong>tabla de páginas</strong>.
+          Las páginas se mapean a marcos físicos no contiguos.
+        </div>
+        <div class="addr-breakdown" id="addrBreakdown">
+          <!-- llenado por JS -->
+        </div>
+      </div>
+
+      <!-- Tamaño de página -->
+      <div class="side-section" id="pageSizeSection">
+        <div class="side-label">Tamaño de Página</div>
+        <select id="pageSizeSelect" onchange="onPageSizeChange()">
+          <option value="4096">4 KiB  (offset 12 bits)</option>
+          <option value="8192">8 KiB  (offset 13 bits)</option>
+          <option value="16384">16 KiB (offset 14 bits)</option>
+          <option value="32768">32 KiB (offset 15 bits)</option>
+          <option value="65536">64 KiB (offset 16 bits)</option>
+        </select>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Programas disponibles -->
+      <div class="side-label">Programas Disponibles</div>
+      <div id="programsList"></div>
+
+      <div class="divider"></div>
+
+      <!-- Instancias en ejecución -->
+      <div class="side-label">Instancias en RAM
+        <span class="instance-count" id="instanceCount">0</span>
+      </div>
+      <div id="instancesList"></div>
+
+      <div class="divider"></div>
+
+      <!-- Acciones -->
+      <div class="side-section">
+        <button class="btn btn-primary" onclick="loadSelectedProgram()">▶ Cargar en RAM</button>
+        <button class="btn btn-danger"  onclick="unloadSelectedInstance()" style="margin-top:6px">✕ Terminar Instancia</button>
+        <button class="btn btn-ghost"   onclick="resetMemory()"            style="margin-top:6px">↺ Resetear Memoria</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Nuevo proceso personalizado -->
+      <div class="side-label">Nuevo Proceso <span class="tag-custom">CUSTOM</span></div>
+      <div class="custom-form">
+        <input type="text"   id="cName" placeholder="Nombre"         maxlength="16" oninput="updatePreview()" />
+        <input type="number" id="cCode" placeholder=".text  (bytes)"  min="1"       oninput="updatePreview()" />
+        <input type="number" id="cData" placeholder=".data  (bytes)"  min="0"       oninput="updatePreview()" />
+        <input type="number" id="cBss"  placeholder=".bss   (bytes)"  min="0"       oninput="updatePreview()" />
+        <div class="fixed-chips">
+          <span>HEADER 767B</span><span>HEAP 128K</span><span>STACK 64K</span>
+        </div>
+        <div class="preview-line" id="previewLine">RAM: <strong id="previewVal">—</strong></div>
+        <div class="form-err" id="formErr" style="display:none"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-primary" style="flex:1" onclick="createCustomProgram()">+ Crear</button>
+          <button class="btn btn-ghost"   style="width:36px;padding:0" onclick="clearForm()">✕</button>
+        </div>
+      </div>
+
+    </aside><!-- /sidebar -->
+
+
+    <!-- ── ÁREA PRINCIPAL ── -->
+    <main class="main-area">
+
+      <!-- Fila superior: mapa de memoria + tabla de traducción -->
+      <div class="top-row">
+
+        <!-- Mapa visual de RAM física -->
+        <section class="card mem-card">
+          <div class="card-header">
+            <span class="card-title">Mapa de Memoria Física — 512 MiB</span>
+            <div class="mem-bars" id="memBars">
+              <div class="bar-used" id="barUsed" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="mem-map-wrap">
+            <div class="addr-col" id="addrCol"></div>
+            <div class="mem-col" id="memCol"></div>
+            <div class="legend-col" id="legendCol"></div>
+          </div>
+        </section>
+
+        <!-- Tabla de traducción de dos niveles -->
+        <section class="card table-card">
+          <div class="card-header">
+            <span class="card-title" id="tableTitle">Tabla de Segmentos + Páginas</span>
+            <span class="chip chip-sm" id="tableSubtitle">—</span>
+          </div>
+          <!-- Tabs para elegir vista de la tabla -->
+          <div class="table-tabs" id="tableTabs">
+            <button class="tbl-tab active" data-tab="seg" onclick="setTableTab('seg')">Segmentos</button>
+            <button class="tbl-tab"        data-tab="pag" onclick="setTableTab('pag')">Páginas</button>
+            <button class="tbl-tab"        data-tab="addr" onclick="setTableTab('addr')">Traducción</button>
+          </div>
+          <div style="overflow:auto;flex:1">
+            <table id="addrTable">
+              <thead id="addrTableHead"></thead>
+              <tbody id="addrTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+      </div><!-- /top-row -->
+
+      <!-- Fila inferior: detalles + estadísticas + log -->
+      <div class="bottom-row">
+
+        <!-- Detalles de la instancia seleccionada -->
+        <section class="card detail-card">
+          <div class="card-header">
+            <span class="card-title">Detalle de Instancia</span>
+          </div>
+          <div id="instanceDetail">
+            <p class="placeholder-text">Selecciona una instancia para ver sus detalles.</p>
+          </div>
+        </section>
+
+        <!-- Estadísticas de fragmentación -->
+        <section class="card stats-card">
+          <div class="card-header">
+            <span class="card-title">Estadísticas</span>
+          </div>
+          <div id="statsPanel"></div>
+        </section>
+
+        <!-- Log de eventos -->
+        <section class="card log-card">
+          <div class="card-header">
+            <span class="card-title">Log de Eventos</span>
+            <button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="clearLog()">Limpiar</button>
+          </div>
+          <ul class="log-list" id="logList"></ul>
+        </section>
+
+      </div><!-- /bottom-row -->
+
+    </main><!-- /main-area -->
+
+  </div><!-- /app-layout -->
+
+  <script src="simulador_seg_pag_v2.js"></script>
+
+</body>
+</html>
